@@ -170,13 +170,17 @@ async def show_question(bot: Bot, user_id: int):
 
 async def question_timeout(bot: Bot, user_id: int, question_id: int):
     """Таймаут вопроса"""
-    if user_id not in active_tests:
+    try:
+        if user_id not in active_tests:
+            return
+        
+        test_data = active_tests[user_id]
+        time_limit = test_data["time_per_question"]
+        
+        await asyncio.sleep(time_limit)
+    except asyncio.CancelledError:
+        # Таймер отменён — пользователь успел ответить
         return
-    
-    test_data = active_tests[user_id]
-    time_limit = test_data["time_per_question"]
-    
-    await asyncio.sleep(time_limit)
     
     # Проверяем, что вопрос ещё актуален
     if user_id not in active_tests:

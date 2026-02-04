@@ -28,9 +28,7 @@ class AuthMiddleware(BaseMiddleware):
                 user_repo = UserRepository(session)
                 user = await user_repo.get_by_telegram_id(telegram_id)
                 data["user"] = user
-                data["db_session"] = session
         else:
             data["user"] = None
-            data["db_session"] = None
         
         return await handler(event, data)
