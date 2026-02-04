@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Добавить сотрудника{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Добавить сотрудника</h1>
+</div>
+
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    {{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="/users/add">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="full_name" class="form-label">ФИО *</label>
+                    <input type="text" class="form-control" id="full_name" name="full_name" required
+                           value="{{ form_data.full_name if form_data else '' }}">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="phone" class="form-label">Телефон *</label>
+                    <input type="tel" class="form-control" id="phone" name="phone" required
+                           placeholder="+7 999 123 45 67"
+                           value="{{ form_data.phone if form_data else '' }}">
+                    <div class="form-text">Сотрудник будет привязывать Telegram по этому номеру</div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="role" class="form-label">Роль *</label>
+                    <select class="form-select" id="role" name="role" required>
+                        <option value="">Выберите роль</option>
+                        {% for r in roles %}
+                        <option value="{{ r.value }}" {% if form_data and form_data.role == r.value %}selected{% endif %}>
+                            {% if r.value == 'hostess' %}Хостес{% endif %}
+                            {% if r.value == 'waiter' %}Официант{% endif %}
+                            {% if r.value == 'bartender' %}Бармен{% endif %}
+                            {% if r.value == 'manager' %}Менеджер{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="branch" class="form-label">Филиал *</label>
+                    <input type="text" class="form-control" id="branch" name="branch" required
+                           value="{{ form_data.branch if form_data else default_branch }}">
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-plus-lg"></i> Добавить
+                </button>
+                <a href="/users/" class="btn btn-outline-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

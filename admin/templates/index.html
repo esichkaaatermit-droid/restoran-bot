@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Главная{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Добро пожаловать в админ-панель</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-people text-primary"></i> Пользователи</h5>
+                <p class="card-text">Управление сотрудниками: добавление, редактирование, активация/деактивация.</p>
+                <a href="/users/" class="btn btn-primary">Перейти</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-upload text-success"></i> Импорт данных</h5>
+                <p class="card-text">Загрузка меню, обучающих материалов, тестов и стоп/go-листов из Excel.</p>
+                <a href="/import/" class="btn btn-success">Перейти</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-bar-chart text-info"></i> Статистика</h5>
+                <p class="card-text">Просмотр результатов тестирования сотрудников.</p>
+                <a href="/stats/" class="btn btn-info">Перейти</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Информация о филиале</h5>
+    </div>
+    <div class="card-body">
+        <p><strong>Название:</strong> Бистро «ГАВРОШ»</p>
+        <p><strong>Адрес:</strong> ул. Пушкинская 36/69</p>
+        <p class="mb-0"><strong>Статус:</strong> <span class="badge bg-success">Пилотный проект</span></p>
+    </div>
+</div>
+{% endblock %}
