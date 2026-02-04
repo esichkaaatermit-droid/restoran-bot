@@ -1,5 +1,8 @@
+import os
+from pathlib import Path
+
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -7,6 +10,9 @@ from aiogram.fsm.state import State, StatesGroup
 from database.database import async_session_maker
 from database.repositories import UserRepository
 from bot.keyboards import get_main_menu_keyboard
+
+# Путь к логотипу
+LOGO_PATH = Path(__file__).parent.parent / "assets" / "logo.png"
 
 router = Router()
 
@@ -21,23 +27,50 @@ async def cmd_start(message: Message, state: FSMContext, user=None):
     """Обработка команды /start"""
     
     if user:
-        # Пользователь уже привязан - показываем главное меню
-        await message.answer(
-            f"Приветствую Вас в нашем чат-боте! Рады видеть Вас в команде!\n\n"
-            f"Вы авторизованы как: {user.full_name}\n"
-            f"Должность: {get_role_name(user.role.value)}\n"
-            f"Филиал: {user.branch}",
-            reply_markup=get_main_menu_keyboard()
-        )
+        # Пользователь уже привязан - показываем главное меню с логотипом
+        if LOGO_PATH.exists():
+            await message.answer_photo(
+                photo=FSInputFile(LOGO_PATH),
+                caption=(
+                    f"<b>Приветствую Вас в нашем чат-боте!</b>\n"
+                    f"Рады видеть Вас в команде!\n\n"
+                    f"👤 <b>Вы авторизованы как:</b> {user.full_name}\n"
+                    f"💼 <b>Должность:</b> {get_role_name(user.role.value)}\n"
+                    f"📍 <b>Филиал:</b> {user.branch}"
+                ),
+                reply_markup=get_main_menu_keyboard()
+            )
+        else:
+            await message.answer(
+                f"<b>Приветствую Вас в нашем чат-боте!</b>\n"
+                f"Рады видеть Вас в команде!\n\n"
+                f"👤 <b>Вы авторизованы как:</b> {user.full_name}\n"
+                f"💼 <b>Должность:</b> {get_role_name(user.role.value)}\n"
+                f"📍 <b>Филиал:</b> {user.branch}",
+                reply_markup=get_main_menu_keyboard()
+            )
         await state.clear()
     else:
-        # Пользователь не найден - запрашиваем телефон
-        await message.answer(
-            "Добро пожаловать!\n\n"
-            "Вы ещё не подключены к системе. "
-            "Пожалуйста, введите Ваш номер телефона, который указан у администратора.\n\n"
-            "Например: +7 999 123 45 67 или 89991234567"
-        )
+        # Пользователь не найден - запрашиваем телефон с логотипом
+        if LOGO_PATH.exists():
+            await message.answer_photo(
+                photo=FSInputFile(LOGO_PATH),
+                caption=(
+                    "<b>Добро пожаловать в Бистро ГАВРОШ!</b>\n\n"
+                    "Вы ещё не подключены к системе.\n"
+                    "Пожалуйста, введите Ваш номер телефона, "
+                    "который указан у администратора.\n\n"
+                    "Например: +7 999 123 45 67 или 89991234567"
+                )
+            )
+        else:
+            await message.answer(
+                "<b>Добро пожаловать!</b>\n\n"
+                "Вы ещё не подключены к системе.\n"
+                "Пожалуйста, введите Ваш номер телефона, "
+                "который указан у администратора.\n\n"
+                "Например: +7 999 123 45 67 или 89991234567"
+            )
         await state.set_state(BindPhoneStates.waiting_for_phone)
 
 
@@ -57,14 +90,27 @@ async def process_phone(message: Message, state: FSMContext):
             # Привязываем telegram_id
             await user_repo.bind_telegram(user.id, telegram_id)
             
-            await message.answer(
-                f"Спасибо, доступ подтверждён! Теперь Вы можете пользоваться ботом.\n\n"
-                f"Приветствую Вас в нашем чат-боте! Рады видеть Вас в команде!\n\n"
-                f"Вы авторизованы как: {user.full_name}\n"
-                f"Должность: {get_role_name(user.role.value)}\n"
-                f"Филиал: {user.branch}",
-                reply_markup=get_main_menu_keyboard()
-            )
+            if LOGO_PATH.exists():
+                await message.answer_photo(
+                    photo=FSInputFile(LOGO_PATH),
+                    caption=(
+                        "✅ <b>Спасибо, доступ подтверждён!</b>\n"
+                        "Теперь Вы можете пользоваться ботом.\n\n"
+                        f"👤 <b>Вы авторизованы как:</b> {user.full_name}\n"
+                        f"💼 <b>Должность:</b> {get_role_name(user.role.value)}\n"
+                        f"📍 <b>Филиал:</b> {user.branch}"
+                    ),
+                    reply_markup=get_main_menu_keyboard()
+                )
+            else:
+                await message.answer(
+                    f"✅ <b>Спасибо, доступ подтверждён!</b>\n"
+                    f"Теперь Вы можете пользоваться ботом.\n\n"
+                    f"👤 <b>Вы авторизованы как:</b> {user.full_name}\n"
+                    f"💼 <b>Должность:</b> {get_role_name(user.role.value)}\n"
+                    f"📍 <b>Филиал:</b> {user.branch}",
+                    reply_markup=get_main_menu_keyboard()
+                )
             await state.clear()
         else:
             # Проверяем, может телефон уже привязан к другому telegram_id
