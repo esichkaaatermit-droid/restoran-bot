@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import TrainingMaterial, TrainingProgress, UserRole
@@ -19,6 +19,35 @@ class TrainingRepository:
             select(TrainingMaterial)
             .where(
                 TrainingMaterial.role == role,
+                TrainingMaterial.branch == branch
+            )
+            .order_by(TrainingMaterial.category, TrainingMaterial.order_num, TrainingMaterial.title)
+        )
+        return list(result.scalars().all())
+    
+    async def get_categories_by_role(self, role: UserRole, branch: str) -> List[str]:
+        """Получить список категорий для роли"""
+        result = await self.session.execute(
+            select(TrainingMaterial.category)
+            .where(
+                TrainingMaterial.role == role,
+                TrainingMaterial.branch == branch,
+                TrainingMaterial.category.isnot(None)
+            )
+            .distinct()
+            .order_by(TrainingMaterial.category)
+        )
+        return [row[0] for row in result.all() if row[0]]
+    
+    async def get_materials_by_category(
+        self, role: UserRole, category: str, branch: str
+    ) -> List[TrainingMaterial]:
+        """Получить материалы по категории"""
+        result = await self.session.execute(
+            select(TrainingMaterial)
+            .where(
+                TrainingMaterial.role == role,
+                TrainingMaterial.category == category,
                 TrainingMaterial.branch == branch
             )
             .order_by(TrainingMaterial.order_num, TrainingMaterial.title)
@@ -100,6 +129,55 @@ class TrainingRepository:
         query = select(TrainingMaterial)
         if branch:
             query = query.where(TrainingMaterial.branch == branch)
-        query = query.order_by(TrainingMaterial.role, TrainingMaterial.order_num)
+        query = query.order_by(TrainingMaterial.role, TrainingMaterial.category, TrainingMaterial.order_num)
         result = await self.session.execute(query)
         return list(result.scalars().all())
+    
+    async def get_filtered(
+        self,
+        branch: Optional[str] = None,
+        role: Optional[UserRole] = None,
+        category: Optional[str] = None,
+        search: Optional[str] = None
+    ) -> List[TrainingMaterial]:
+        """Получить отфильтрованные материалы"""
+        query = select(TrainingMaterial)
+        
+        if branch:
+            query = query.where(TrainingMaterial.branch == branch)
+        if role:
+            query = query.where(TrainingMaterial.role == role)
+        if category:
+            query = query.where(TrainingMaterial.category == category)
+        if search:
+            query = query.where(TrainingMaterial.title.ilike(f"%{search}%"))
+        
+        query = query.order_by(TrainingMaterial.role, TrainingMaterial.category, TrainingMaterial.order_num)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+    
+    async def update(self, material_id: int, **kwargs) -> Optional[TrainingMaterial]:
+        """Обновить материал"""
+        await self.session.execute(
+            update(TrainingMaterial)
+            .where(TrainingMaterial.id == material_id)
+            .values(**kwargs)
+        )
+        await self.session.commit()
+        return await self.get_material_by_id(material_id)
+    
+    async def delete_by_id(self, material_id: int) -> bool:
+        """Удалить материал по ID"""
+        result = await self.session.execute(
+            delete(TrainingMaterial).where(TrainingMaterial.id == material_id)
+        )
+        await self.session.commit()
+        return result.rowcount > 0
+    
+    async def count_by_role(self, role: UserRole, branch: Optional[str] = None) -> int:
+        """Подсчитать количество материалов по роли"""
+        query = select(func.count(TrainingMaterial.id)).where(TrainingMaterial.role == role)
+        if branch:
+            query = query.where(TrainingMaterial.branch == branch)
+        result = await self.session.execute(query)
+        return result.scalar() or 0

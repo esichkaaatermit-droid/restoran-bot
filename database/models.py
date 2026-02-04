@@ -66,9 +66,15 @@ class MenuItem(Base):
     composition: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # состав
     weight_volume: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # граммовка/объём
     price: Mapped[float] = mapped_column(Float, nullable=False)
-    category: Mapped[str] = mapped_column(String(100), nullable=False)  # завтраки, салаты, кофе и т.д.
+    category: Mapped[str] = mapped_column(String(100), nullable=False)  # Завтраки, Основное меню и т.д.
+    subcategory: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Каши, Яйца и т.д.
     menu_type: Mapped[MenuType] = mapped_column(Enum(MenuType), nullable=False)  # кухня или бар
     status: Mapped[MenuItemStatus] = mapped_column(Enum(MenuItemStatus), default=MenuItemStatus.NORMAL)
+    photo: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # путь к фото
+    calories: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # калории
+    proteins: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # белки
+    fats: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # жиры
+    carbs: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # углеводы
     branch: Mapped[str] = mapped_column(String(255), nullable=False, default='Бистро "ГАВРОШ" (Пушкинская 36/69)')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -81,7 +87,9 @@ class TrainingMaterial(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    content: Mapped[str] = mapped_column(Text, nullable=False)  # текст или ссылка на файл
+    content: Mapped[str] = mapped_column(Text, nullable=False)  # текст материала
+    category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # тема: Сервис, Вино и т.д.
+    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # путь к файлу (PDF/видео)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False)  # для какой роли
     order_num: Mapped[int] = mapped_column(Integer, default=0)  # порядок отображения
     branch: Mapped[str] = mapped_column(String(255), nullable=False, default='Бистро "ГАВРОШ" (Пушкинская 36/69)')

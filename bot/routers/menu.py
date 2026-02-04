@@ -10,7 +10,11 @@ from bot.keyboards import (
     get_items_keyboard,
     get_back_keyboard,
 )
-from bot.keyboards.keyboards import get_item_back_keyboard
+from bot.keyboards.keyboards import (
+    get_item_back_keyboard,
+    get_kitchen_categories_keyboard,
+    get_bar_categories_keyboard,
+)
 
 router = Router()
 
@@ -25,24 +29,17 @@ async def select_menu_type(callback: CallbackQuery, user=None):
         return
     
     menu_type = callback.data.split(":")[1]
-    menu_type_enum = MenuType.KITCHEN if menu_type == "kitchen" else MenuType.BAR
     
-    async with async_session_maker() as session:
-        menu_repo = MenuRepository(session)
-        categories = await menu_repo.get_categories(menu_type_enum, user.branch)
-    
-    if not categories:
+    if menu_type == "kitchen":
         await callback.message.edit_text(
-            "В данном разделе пока нет позиций.",
-            reply_markup=get_menu_type_keyboard()
+            "🍳 Меню кухни\n\nВыберите категорию:",
+            reply_markup=get_kitchen_categories_keyboard()
         )
-        return
-    
-    menu_title = "🍳 Меню кухни" if menu_type == "kitchen" else "🍹 Меню бара"
-    await callback.message.edit_text(
-        f"{menu_title}\n\nВыберите категорию:",
-        reply_markup=get_categories_keyboard(categories, menu_type)
-    )
+    else:
+        await callback.message.edit_text(
+            "🍹 Меню бара\n\nВыберите категорию:",
+            reply_markup=get_bar_categories_keyboard()
+        )
 
 
 @router.callback_query(F.data == "menu_back_to_types")
@@ -65,17 +62,17 @@ async def back_to_categories(callback: CallbackQuery, user=None):
         return
     
     menu_type = callback.data.split(":")[1]
-    menu_type_enum = MenuType.KITCHEN if menu_type == "kitchen" else MenuType.BAR
     
-    async with async_session_maker() as session:
-        menu_repo = MenuRepository(session)
-        categories = await menu_repo.get_categories(menu_type_enum, user.branch)
-    
-    menu_title = "🍳 Меню кухни" if menu_type == "kitchen" else "🍹 Меню бара"
-    await callback.message.edit_text(
-        f"{menu_title}\n\nВыберите категорию:",
-        reply_markup=get_categories_keyboard(categories, menu_type)
-    )
+    if menu_type == "kitchen":
+        await callback.message.edit_text(
+            "🍳 Меню кухни\n\nВыберите категорию:",
+            reply_markup=get_kitchen_categories_keyboard()
+        )
+    else:
+        await callback.message.edit_text(
+            "🍹 Меню бара\n\nВыберите категорию:",
+            reply_markup=get_bar_categories_keyboard()
+        )
 
 
 @router.callback_query(F.data.startswith("category:"))
@@ -97,12 +94,13 @@ async def select_category(callback: CallbackQuery, user=None):
         items = await menu_repo.get_items_by_category(category, menu_type_enum, user.branch)
     
     if not items:
+        if menu_type == "kitchen":
+            keyboard = get_kitchen_categories_keyboard()
+        else:
+            keyboard = get_bar_categories_keyboard()
         await callback.message.edit_text(
             f"В категории «{category}» пока нет доступных позиций.",
-            reply_markup=get_categories_keyboard(
-                [category],
-                menu_type
-            )
+            reply_markup=keyboard
         )
         return
     

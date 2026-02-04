@@ -40,6 +40,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:password@db:5432/restoran_bot
     ports:
       - "8000:8000"
+    volumes:
+      - ./static/uploads:/app/static/uploads
     restart: unless-stopped
 
 volumes:

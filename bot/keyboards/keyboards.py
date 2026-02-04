@@ -33,6 +33,48 @@ def get_menu_type_keyboard() -> InlineKeyboardMarkup:
     return keyboard
 
 
+def get_kitchen_categories_keyboard() -> InlineKeyboardMarkup:
+    """Категории меню кухни"""
+    categories = [
+        "Завтраки",
+        "Основное меню",
+        "Сезонное меню",
+        "Меню выпечки и десертов"
+    ]
+    buttons = []
+    for category in categories:
+        buttons.append([
+            InlineKeyboardButton(
+                text=category,
+                callback_data=f"category:kitchen:{category}"
+            )
+        ])
+    
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu_back_to_types")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_bar_categories_keyboard() -> InlineKeyboardMarkup:
+    """Категории меню бара"""
+    categories = [
+        "Безалкогольные напитки",
+        "Алкогольные напитки"
+    ]
+    buttons = []
+    for category in categories:
+        buttons.append([
+            InlineKeyboardButton(
+                text=category,
+                callback_data=f"category:bar:{category}"
+            )
+        ])
+    
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu_back_to_types")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def get_categories_keyboard(categories: List[str], menu_type: str) -> InlineKeyboardMarkup:
     """Список категорий"""
     buttons = []
