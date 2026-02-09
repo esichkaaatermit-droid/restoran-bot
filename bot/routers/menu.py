@@ -1,5 +1,7 @@
+from pathlib import Path
+
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, FSInputFile
 
 from database.database import async_session_maker
 from database.repositories import MenuRepository
@@ -151,8 +153,30 @@ async def show_item(callback: CallbackQuery, user=None):
     
     menu_type = "kitchen" if item.menu_type == MenuType.KITCHEN else "bar"
     
-    await callback.message.edit_text(
-        card_text,
-        reply_markup=get_item_back_keyboard(menu_type, item.category),
-        parse_mode="HTML"
-    )
+    # Если есть фото — отправляем с фото
+    if item.photo:
+        photo_path = Path(item.photo)
+        if photo_path.exists():
+            # Удаляем старое сообщение
+            await callback.message.delete()
+            # Отправляем новое с фото
+            await callback.message.answer_photo(
+                photo=FSInputFile(photo_path),
+                caption=card_text,
+                reply_markup=get_item_back_keyboard(menu_type, item.category),
+                parse_mode="HTML"
+            )
+        else:
+            # Файл не найден — отправляем без фото
+            await callback.message.edit_text(
+                card_text,
+                reply_markup=get_item_back_keyboard(menu_type, item.category),
+                parse_mode="HTML"
+            )
+    else:
+        # Нет фото — отправляем только текст
+        await callback.message.edit_text(
+            card_text,
+            reply_markup=get_item_back_keyboard(menu_type, item.category),
+            parse_mode="HTML"
+        )

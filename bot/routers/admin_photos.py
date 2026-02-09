@@ -1,5 +1,7 @@
 """Загрузка фото блюд (админ)"""
 
+from pathlib import Path
+
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
@@ -8,6 +10,9 @@ from aiogram.fsm.state import State, StatesGroup
 from database.database import async_session_maker
 from database.repositories import MenuRepository
 from bot.keyboards.admin_keyboards import get_photo_search_results_keyboard
+
+# Путь к папке с фото
+PHOTOS_DIR = Path(__file__).parent.parent.parent / "photos"
 
 router = Router()
 
@@ -89,11 +94,21 @@ async def admin_photo_upload(message: Message, state: FSMContext, user=None):
     item_id = data.get("item_id")
     await state.clear()
 
+    # Получаем файл
     file_id = message.photo[-1].file_id
+    file = await message.bot.get_file(file_id)
 
+    # Создаём папку для фото, если её нет
+    PHOTOS_DIR.mkdir(exist_ok=True)
+
+    # Скачиваем фото
+    file_path = PHOTOS_DIR / f"{item_id}.jpg"
+    await message.bot.download_file(file.file_path, file_path)
+
+    # Сохраняем путь в базу данных
     async with async_session_maker() as session:
         menu_repo = MenuRepository(session)
-        item = await menu_repo.update(item_id, photo=file_id)
+        item = await menu_repo.update(item_id, photo=str(file_path))
 
     if item:
         await message.answer(

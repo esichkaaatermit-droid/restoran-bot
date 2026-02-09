@@ -12,3 +12,8 @@ build/
 .vscode/
 *.db
 credentials.json
+
+# Фото блюд (хранятся локально)
+photos/*.jpg
+photos/*.jpeg
+photos/*.png
