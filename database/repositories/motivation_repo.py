@@ -1,7 +1,7 @@
 from typing import Optional, List
 import random
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import MotivationMessage
@@ -51,6 +51,14 @@ class MotivationRepository:
         await self.session.commit()
         return len(texts)
     
+    async def delete_all(self) -> int:
+        """Удалить все мотивационные сообщения"""
+        result = await self.session.execute(
+            delete(MotivationMessage)
+        )
+        await self.session.commit()
+        return result.rowcount
+
     async def update(self, message_id: int, text: str = None, is_active: bool = None) -> Optional[MotivationMessage]:
         """Обновить сообщение"""
         result = await self.session.execute(

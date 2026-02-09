@@ -13,7 +13,6 @@ from bot.keyboards import (
     get_tests_keyboard,
     get_test_answers_keyboard,
     get_back_keyboard,
-    get_main_menu_keyboard,
 )
 
 router = Router()

@@ -111,6 +111,16 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
     
+    async def get_all_with_telegram(self) -> List[User]:
+        """Получить всех активных пользователей с привязанным Telegram"""
+        result = await self.session.execute(
+            select(User).where(
+                User.is_active == True,
+                User.telegram_id.isnot(None),
+            )
+        )
+        return list(result.scalars().all())
+
     @staticmethod
     def _normalize_phone(phone: str) -> str:
         """Нормализация номера телефона"""

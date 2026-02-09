@@ -204,6 +204,19 @@ class MenuRepository:
         await self.session.commit()
         return result.rowcount > 0
     
+    async def search_by_name(self, search: str, branch: str) -> List[MenuItem]:
+        """Поиск позиций меню по названию"""
+        result = await self.session.execute(
+            select(MenuItem)
+            .where(
+                MenuItem.branch == branch,
+                MenuItem.name.ilike(f"%{search}%"),
+            )
+            .order_by(MenuItem.name)
+            .limit(10)
+        )
+        return list(result.scalars().all())
+
     async def count_by_type(self, menu_type: MenuType, branch: Optional[str] = None) -> int:
         """Подсчитать количество позиций по типу меню"""
         query = select(func.count(MenuItem.id)).where(MenuItem.menu_type == menu_type)

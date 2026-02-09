@@ -1,38 +1,14 @@
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-venv/
-env/
-.venv/
-ENV/
-
-# Environment
 .env
-.env.local
-
-# IDE
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
 .idea/
 .vscode/
-*.swp
-*.swo
-
-# Database
 *.db
-*.sqlite3
-
-# Logs
-*.log
-logs/
-
-# Excel uploads (user data)
-uploads/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Docker
-docker-compose.override.yml
+credentials.json

@@ -3,11 +3,10 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
-    container_name: restoran_db
     environment:
+      POSTGRES_DB: restoran_bot
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: restoran_bot
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -18,30 +17,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: restoran_bot
     depends_on:
       - db
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:password@db:5432/restoran_bot
-    restart: unless-stopped
-
-  admin:
-    build:
-      context: .
-      dockerfile: Dockerfile.admin
-    container_name: restoran_admin
-    depends_on:
-      - db
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:password@db:5432/restoran_bot
-    ports:
-      - "8000:8000"
     volumes:
-      - ./static/uploads:/app/static/uploads
+      - ./credentials.json:/app/credentials.json:ro
     restart: unless-stopped
 
 volumes:

@@ -1,5 +1,4 @@
 from .keyboards import (
-    get_main_menu_keyboard,
     get_menu_type_keyboard,
     get_categories_keyboard,
     get_items_keyboard,
@@ -8,10 +7,11 @@ from .keyboards import (
     get_tests_keyboard,
     get_test_answers_keyboard,
     get_mark_completed_keyboard,
+    get_checklist_categories_keyboard,
+    get_checklist_back_keyboard,
 )
 
 __all__ = [
-    "get_main_menu_keyboard",
     "get_menu_type_keyboard",
     "get_categories_keyboard",
     "get_items_keyboard",
@@ -20,4 +20,6 @@ __all__ = [
     "get_tests_keyboard",
     "get_test_answers_keyboard",
     "get_mark_completed_keyboard",
+    "get_checklist_categories_keyboard",
+    "get_checklist_back_keyboard",
 ]

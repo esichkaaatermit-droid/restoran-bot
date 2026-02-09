@@ -188,3 +188,16 @@ class MotivationMessage(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ChecklistItem(Base):
+    """Пункт чек-листа для сотрудников"""
+    __tablename__ = "checklist_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False)
+    category: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    task: Mapped[str] = mapped_column(Text, nullable=False)
+    order_num: Mapped[int] = mapped_column(Integer, default=0)
+    branch: Mapped[str] = mapped_column(String(255), nullable=False, default='Бистро "ГАВРОШ" (Пушкинская 36/69)')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
