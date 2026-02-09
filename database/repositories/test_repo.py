@@ -144,9 +144,32 @@ class TestRepository:
         return answer
     
     async def delete_all_by_branch(self, branch: str) -> int:
-        """Удалить все тесты для филиала"""
+        """Удалить все тесты для филиала (с каскадным удалением вопросов и ответов)"""
+        # Получаем ID тестов
+        tests = await self.session.execute(
+            select(Test.id).where(Test.branch == branch)
+        )
+        test_ids = [row[0] for row in tests.all()]
+        if not test_ids:
+            return 0
+
+        # Получаем ID вопросов
+        questions = await self.session.execute(
+            select(Question.id).where(Question.test_id.in_(test_ids))
+        )
+        question_ids = [row[0] for row in questions.all()]
+
+        # Удаляем в правильном порядке: ответы → вопросы → тесты
+        if question_ids:
+            await self.session.execute(
+                delete(Answer).where(Answer.question_id.in_(question_ids))
+            )
+        if test_ids:
+            await self.session.execute(
+                delete(Question).where(Question.test_id.in_(test_ids))
+            )
         result = await self.session.execute(
-            delete(Test).where(Test.branch == branch)
+            delete(Test).where(Test.id.in_(test_ids))
         )
         await self.session.commit()
         return result.rowcount

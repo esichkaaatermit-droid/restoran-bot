@@ -87,15 +87,52 @@ class GoogleSheetsSync:
             logger.error(f"Ошибка подключения к Google Sheets: {e}")
             return False
 
+    def _find_worksheet(self, sheet_name: str):
+        """Найти лист по имени (с учётом пробелов)"""
+        try:
+            return self.spreadsheet.worksheet(sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            for ws in self.spreadsheet.worksheets():
+                if ws.title.strip() == sheet_name.strip():
+                    logger.info(f"Лист найден с пробелами: '{ws.title}' -> '{sheet_name}'")
+                    return ws
+            return None
+
     def _get_sheet_records(self, sheet_name: str) -> List[Dict[str, Any]]:
         """Получить записи из листа"""
         try:
-            worksheet = self.spreadsheet.worksheet(sheet_name)
-            records = worksheet.get_all_records()
-            return records
-        except gspread.exceptions.WorksheetNotFound:
-            logger.warning(f"Лист '{sheet_name}' не найден в таблице")
-            return []
+            worksheet = self._find_worksheet(sheet_name)
+            if not worksheet:
+                logger.warning(f"Лист '{sheet_name}' не найден в таблице")
+                return []
+            try:
+                records = worksheet.get_all_records()
+                return records
+            except Exception:
+                # Если заголовки неуникальны — читаем вручную
+                all_values = worksheet.get_all_values()
+                if len(all_values) < 2:
+                    return []
+                headers = all_values[0]
+                # Делаем заголовки уникальными
+                seen = {}
+                unique_headers = []
+                for h in headers:
+                    h = h.strip()
+                    if h in seen:
+                        seen[h] += 1
+                        unique_headers.append(f"{h}_{seen[h]}")
+                    else:
+                        seen[h] = 0
+                        unique_headers.append(h)
+                records = []
+                for row in all_values[1:]:
+                    record = {}
+                    for i, val in enumerate(row):
+                        if i < len(unique_headers):
+                            record[unique_headers[i]] = val
+                    records.append(record)
+                return records
         except Exception as e:
             logger.error(f"Ошибка чтения листа '{sheet_name}': {e}")
             return []
@@ -374,9 +411,9 @@ class GoogleSheetsSync:
         report = {"success": True, "details": {}}
         branch = settings.DEFAULT_BRANCH
 
-        async with async_session_maker() as session:
-            # 1. Синхронизация сотрудников
-            try:
+        # 1. Синхронизация сотрудников
+        try:
+            async with async_session_maker() as session:
                 employees = self.read_employees()
                 user_repo = UserRepository(session)
                 created, updated, deactivated = 0, 0, 0
@@ -409,16 +446,16 @@ class GoogleSheetsSync:
                     "updated": updated,
                     "deactivated": deactivated,
                 }
-            except Exception as e:
-                logger.error(f"Ошибка синхронизации сотрудников: {e}")
-                report["details"]["employees"] = {"error": str(e)}
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации сотрудников: {e}")
+            report["details"]["employees"] = {"error": str(e)}
 
-            # 2. Синхронизация меню
-            try:
+        # 2. Синхронизация меню
+        try:
+            async with async_session_maker() as session:
                 menu_items = self.read_menu()
                 menu_repo = MenuRepository(session)
 
-                # Сохраняем текущие статусы и фото перед заменой
                 existing_items = await menu_repo.get_all(branch=branch)
                 status_map = {}
                 photo_map = {}
@@ -438,12 +475,13 @@ class GoogleSheetsSync:
 
                 count = await menu_repo.bulk_create(menu_items)
                 report["details"]["menu"] = {"count": count}
-            except Exception as e:
-                logger.error(f"Ошибка синхронизации меню: {e}")
-                report["details"]["menu"] = {"error": str(e)}
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации меню: {e}")
+            report["details"]["menu"] = {"error": str(e)}
 
-            # 3. Синхронизация обучения
-            try:
+        # 3. Синхронизация обучения
+        try:
+            async with async_session_maker() as session:
                 materials = self.read_training()
                 training_repo = TrainingRepository(session)
 
@@ -462,12 +500,13 @@ class GoogleSheetsSync:
 
                 count = await training_repo.bulk_create(materials)
                 report["details"]["training"] = {"count": count}
-            except Exception as e:
-                logger.error(f"Ошибка синхронизации обучения: {e}")
-                report["details"]["training"] = {"error": str(e)}
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации обучения: {e}")
+            report["details"]["training"] = {"error": str(e)}
 
-            # 4. Синхронизация тестов
-            try:
+        # 4. Синхронизация тестов
+        try:
+            async with async_session_maker() as session:
                 tests, questions_map = self.read_tests()
                 test_repo = TestRepository(session)
 
@@ -514,12 +553,13 @@ class GoogleSheetsSync:
                     "tests": test_count,
                     "questions": question_count,
                 }
-            except Exception as e:
-                logger.error(f"Ошибка синхронизации тестов: {e}")
-                report["details"]["tests"] = {"error": str(e)}
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации тестов: {e}")
+            report["details"]["tests"] = {"error": str(e)}
 
-            # 5. Синхронизация чек-листов
-            try:
+        # 5. Синхронизация чек-листов
+        try:
+            async with async_session_maker() as session:
                 checklists = self.read_checklists()
                 checklist_repo = ChecklistRepository(session)
 
@@ -533,20 +573,21 @@ class GoogleSheetsSync:
                     total_items += count
 
                 report["details"]["checklists"] = {"count": total_items}
-            except Exception as e:
-                logger.error(f"Ошибка синхронизации чек-листов: {e}")
-                report["details"]["checklists"] = {"error": str(e)}
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации чек-листов: {e}")
+            report["details"]["checklists"] = {"error": str(e)}
 
-            # 6. Синхронизация мотивации
-            try:
+        # 6. Синхронизация мотивации
+        try:
+            async with async_session_maker() as session:
                 messages = self.read_motivation()
                 motivation_repo = MotivationRepository(session)
 
                 await motivation_repo.delete_all()
                 count = await motivation_repo.bulk_create(messages)
                 report["details"]["motivation"] = {"count": count}
-            except Exception as e:
-                logger.error(f"Ошибка синхронизации мотивации: {e}")
-                report["details"]["motivation"] = {"error": str(e)}
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации мотивации: {e}")
+            report["details"]["motivation"] = {"error": str(e)}
 
         return report
