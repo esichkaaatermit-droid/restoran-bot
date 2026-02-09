@@ -21,7 +21,6 @@ class UserRepository:
     
     async def get_by_phone(self, phone: str) -> Optional[User]:
         """Получить пользователя по номеру телефона (без привязанного telegram_id)"""
-        # Нормализуем номер телефона
         normalized_phone = self._normalize_phone(phone)
         
         result = await self.session.execute(
@@ -39,6 +38,28 @@ class UserRepository:
         
         result = await self.session.execute(
             select(User).where(User.phone == normalized_phone)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_username(self, username: str) -> Optional[User]:
+        """Получить пользователя по Telegram username"""
+        normalized = username.lstrip("@").strip().lower()
+        result = await self.session.execute(
+            select(User).where(
+                User.telegram_username == normalized
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_username_unbound(self, username: str) -> Optional[User]:
+        """Получить пользователя по Telegram username (без привязанного telegram_id)"""
+        normalized = username.lstrip("@").strip().lower()
+        result = await self.session.execute(
+            select(User).where(
+                User.telegram_username == normalized,
+                User.telegram_id.is_(None),
+                User.is_active == True,
+            )
         )
         return result.scalar_one_or_none()
     
@@ -68,18 +89,20 @@ class UserRepository:
     async def create(
         self,
         full_name: str,
-        phone: str,
         role: UserRole,
         branch: str,
-        telegram_id: Optional[int] = None
+        phone: Optional[str] = None,
+        telegram_id: Optional[int] = None,
+        telegram_username: Optional[str] = None,
     ) -> User:
         """Создать нового пользователя"""
         user = User(
             full_name=full_name,
-            phone=self._normalize_phone(phone),
+            phone=self._normalize_phone(phone) if phone else None,
             role=role,
             branch=branch,
             telegram_id=telegram_id,
+            telegram_username=telegram_username,
             is_active=True
         )
         self.session.add(user)

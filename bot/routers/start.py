@@ -53,27 +53,79 @@ async def cmd_start(message: Message, state: FSMContext, user=None):
             )
 
         await state.clear()
-    else:
-        if LOGO_PATH.exists():
-            await message.answer_photo(
-                photo=FSInputFile(LOGO_PATH),
-                caption=(
-                    "<b>Добро пожаловать в Бистро ГАВРОШ!</b>\n\n"
-                    "Вы ещё не подключены к системе.\n"
-                    "Пожалуйста, введите Ваш номер телефона, "
-                    "который указан у администратора.\n\n"
-                    "Например: +7 999 123 45 67 или 89991234567"
-                ),
-            )
-        else:
-            await message.answer(
-                "<b>Добро пожаловать!</b>\n\n"
+        return
+
+    # Попробуем автопривязку по Telegram username
+    tg_username = message.from_user.username
+    if tg_username:
+        async with async_session_maker() as session:
+            user_repo = UserRepository(session)
+            found_user = await user_repo.get_by_username_unbound(tg_username)
+            if found_user:
+                await user_repo.bind_telegram(found_user.id, message.from_user.id)
+                caption = (
+                    "✅ <b>Вы автоматически авторизованы!</b>\n"
+                    "Ваш Telegram-аккаунт найден в системе.\n\n"
+                    f"👤 <b>Вы авторизованы как:</b> {found_user.full_name}\n"
+                    f"💼 <b>Должность:</b> {get_role_name(found_user.role)}\n"
+                    f"📍 <b>Филиал:</b> {found_user.branch}"
+                )
+                if LOGO_PATH.exists():
+                    await message.answer_photo(
+                        photo=FSInputFile(LOGO_PATH),
+                        caption=caption,
+                        reply_markup=get_main_menu_keyboard(),
+                    )
+                else:
+                    await message.answer(
+                        caption,
+                        reply_markup=get_main_menu_keyboard(),
+                    )
+                if found_user.role.value == "manager":
+                    await message.answer(
+                        "🔑 Для доступа к панели управления используйте /admin"
+                    )
+                await state.clear()
+
+                # Уведомляем менеджеров
+                try:
+                    managers = await user_repo.get_all_with_telegram()
+                    for mgr in managers:
+                        if mgr.role.value == "manager" and mgr.id != found_user.id:
+                            try:
+                                await message.bot.send_message(
+                                    mgr.telegram_id,
+                                    f"ℹ️ Сотрудник <b>{found_user.full_name}</b> "
+                                    f"({get_role_name(found_user.role)}) привязал Telegram.",
+                                    parse_mode="HTML",
+                                )
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                return
+
+    # Если автопривязка не сработала — запрашиваем телефон
+    if LOGO_PATH.exists():
+        await message.answer_photo(
+            photo=FSInputFile(LOGO_PATH),
+            caption=(
+                "<b>Добро пожаловать в Бистро ГАВРОШ!</b>\n\n"
                 "Вы ещё не подключены к системе.\n"
                 "Пожалуйста, введите Ваш номер телефона, "
                 "который указан у администратора.\n\n"
                 "Например: +7 999 123 45 67 или 89991234567"
-            )
-        await state.set_state(BindPhoneStates.waiting_for_phone)
+            ),
+        )
+    else:
+        await message.answer(
+            "<b>Добро пожаловать!</b>\n\n"
+            "Вы ещё не подключены к системе.\n"
+            "Пожалуйста, введите Ваш номер телефона, "
+            "который указан у администратора.\n\n"
+            "Например: +7 999 123 45 67 или 89991234567"
+        )
+    await state.set_state(BindPhoneStates.waiting_for_phone)
 
 
 @router.message(BindPhoneStates.waiting_for_phone)

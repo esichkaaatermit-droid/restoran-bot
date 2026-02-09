@@ -44,8 +44,9 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     telegram_id: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True, nullable=True)
+    telegram_username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False)
     branch: Mapped[str] = mapped_column(String(255), nullable=False, default='Бистро "ГАВРОШ" (Пушкинская 36/69)')
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

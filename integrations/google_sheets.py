@@ -157,19 +157,35 @@ class GoogleSheetsSync:
 
     # ========== СОТРУДНИКИ ==========
 
+    @staticmethod
+    def _is_phone(value: str) -> bool:
+        """Проверить, похоже ли значение на номер телефона"""
+        digits = ''.join(filter(str.isdigit, value))
+        return len(digits) >= 7
+
+    @staticmethod
+    def _normalize_username(value: str) -> str:
+        """Нормализовать Telegram username (без @, в нижнем регистре)"""
+        return value.lstrip("@").strip().lower()
+
     def read_employees(self) -> List[Dict[str, Any]]:
-        """Прочитать сотрудников из Google Sheets (лист 'Доступ')"""
+        """Прочитать сотрудников из Google Sheets (лист 'Доступ').
+
+        Колонка 'Телефон' может содержать:
+        - Номер телефона (79991234567, +7 999 123-45-67, 89991234567)
+        - Telegram username (@username или username)
+        """
         records = self._get_sheet_records("Доступ")
         employees = []
 
         for row in records:
             full_name = str(row.get("ФИО", "")).strip()
-            phone = str(row.get("Телефон", "")).strip()
+            contact = str(row.get("Телефон", "")).strip()
             role_str = str(row.get("Должность", "")).strip().lower()
             branch = str(row.get("Филиал", "")).strip()
             active_str = str(row.get("Активен", "да")).strip().lower()
 
-            if not full_name or not phone:
+            if not full_name or not contact:
                 continue
 
             role = ROLE_MAP.get(role_str)
@@ -180,9 +196,19 @@ class GoogleSheetsSync:
             if not branch:
                 branch = settings.DEFAULT_BRANCH
 
+            # Определяем: телефон или username
+            phone = None
+            telegram_username = None
+
+            if self._is_phone(contact):
+                phone = contact
+            else:
+                telegram_username = self._normalize_username(contact)
+
             employees.append({
                 "full_name": full_name,
                 "phone": phone,
+                "telegram_username": telegram_username,
                 "role": role,
                 "branch": branch,
                 "is_active": active_str in ("да", "yes", "true", "1", "активен"),
@@ -419,15 +445,25 @@ class GoogleSheetsSync:
                 created, updated, deactivated = 0, 0, 0
 
                 for emp in employees:
-                    existing = await user_repo.get_by_phone_any(emp["phone"])
+                    # Ищем существующего сотрудника по телефону или username
+                    existing = None
+                    if emp["phone"]:
+                        existing = await user_repo.get_by_phone_any(emp["phone"])
+                    if not existing and emp.get("telegram_username"):
+                        existing = await user_repo.get_by_username(emp["telegram_username"])
+
                     if existing:
-                        await user_repo.update(
-                            existing.id,
-                            full_name=emp["full_name"],
-                            role=emp["role"],
-                            branch=emp["branch"],
-                            is_active=emp["is_active"],
-                        )
+                        update_data = {
+                            "full_name": emp["full_name"],
+                            "role": emp["role"],
+                            "branch": emp["branch"],
+                            "is_active": emp["is_active"],
+                        }
+                        if emp["phone"]:
+                            update_data["phone"] = emp["phone"]
+                        if emp.get("telegram_username"):
+                            update_data["telegram_username"] = emp["telegram_username"]
+                        await user_repo.update(existing.id, **update_data)
                         if emp["is_active"]:
                             updated += 1
                         else:
@@ -435,9 +471,10 @@ class GoogleSheetsSync:
                     else:
                         await user_repo.create(
                             full_name=emp["full_name"],
-                            phone=emp["phone"],
+                            phone=emp.get("phone"),
                             role=emp["role"],
                             branch=emp["branch"],
+                            telegram_username=emp.get("telegram_username"),
                         )
                         created += 1
 
