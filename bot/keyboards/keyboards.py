@@ -166,16 +166,19 @@ def get_test_answers_keyboard(answers: List[Answer], question_id: int) -> Inline
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_item_back_keyboard(menu_type: str, category: str) -> InlineKeyboardMarkup:
-    """Кнопка назад к списку позиций"""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(
-                text="◀️ Назад к списку",
-                callback_data=f"category:{menu_type}:{category[:50]}"
-            )]
-        ]
-    )
+def get_item_back_keyboard(menu_type: str, category: str, item_id: int = None, is_manager: bool = False) -> InlineKeyboardMarkup:
+    """Кнопка назад к списку позиций (+ загрузка фото для менеджера)"""
+    buttons = []
+    if is_manager and item_id:
+        buttons.append([InlineKeyboardButton(
+            text="📸 Загрузить фото",
+            callback_data=f"menu_upload_photo:{item_id}"
+        )])
+    buttons.append([InlineKeyboardButton(
+        text="◀️ Назад к списку",
+        callback_data=f"category:{menu_type}:{category[:50]}"
+    )])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 # ========== ЧЕК-ЛИСТЫ ==========

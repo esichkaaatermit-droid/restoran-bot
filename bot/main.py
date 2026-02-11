@@ -55,11 +55,11 @@ async def main():
     # Подключение роутеров
     dp.include_router(setup_routers())
 
-    # Планировщик автосинхронизации
+    # Планировщик автосинхронизации (каждые 4 часа: 2:00, 6:00, 10:00, 14:00, 18:00, 22:00)
     scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
-    scheduler.add_job(auto_sync, "cron", hour=settings.AUTO_SYNC_HOUR, minute=0)
+    scheduler.add_job(auto_sync, "interval", hours=4)
     scheduler.start()
-    logger.info(f"Автосинхронизация запланирована на {settings.AUTO_SYNC_HOUR}:00 MSK")
+    logger.info("Автосинхронизация запланирована каждые 4 часа")
 
     # Запуск polling
     logger.info("Бот запущен и готов к работе!")

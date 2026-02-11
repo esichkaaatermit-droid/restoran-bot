@@ -5,6 +5,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 
 from bot.keyboards.admin_keyboards import get_admin_menu_keyboard
+from bot.keyboards import get_menu_type_keyboard
 
 router = Router()
 
@@ -33,6 +34,20 @@ async def admin_back(callback: CallbackQuery, user=None):
     await callback.message.edit_text(
         "⚙️ <b>Панель управления</b>\n\nВыберите раздел:",
         reply_markup=get_admin_menu_keyboard(),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "admin:menu")
+async def admin_menu_section(callback: CallbackQuery, user=None):
+    """Открыть меню блюд из админки"""
+    await callback.answer()
+    if not user or user.role.value != "manager":
+        return
+
+    await callback.message.edit_text(
+        "🍽 <b>Меню</b>\n\nВыберите раздел меню:",
+        reply_markup=get_menu_type_keyboard(),
         parse_mode="HTML",
     )
 

@@ -11,14 +11,10 @@ from .checklist import router as checklist_router
 
 # Админские роутеры
 from .admin_main import router as admin_main_router
-from .admin_users import router as admin_users_router
 from .admin_stopgo import router as admin_stopgo_router
-from .admin_photos import router as admin_photos_router
-from .admin_files import router as admin_files_router
 from .admin_attest import router as admin_attest_router
-from .admin_broadcast import router as admin_broadcast_router
 from .admin_sync import router as admin_sync_router
-from .admin_stats import router as admin_stats_router
+from .admin_progress import router as admin_progress_router
 
 
 def setup_routers() -> Router:
@@ -31,14 +27,10 @@ def setup_routers() -> Router:
     # Админские роутеры (перед пользовательскими, чтобы FSM состояния
     # админки обрабатывались приоритетнее)
     router.include_router(admin_main_router)
-    router.include_router(admin_users_router)
     router.include_router(admin_stopgo_router)
-    router.include_router(admin_photos_router)
-    router.include_router(admin_files_router)
     router.include_router(admin_attest_router)
-    router.include_router(admin_broadcast_router)
     router.include_router(admin_sync_router)
-    router.include_router(admin_stats_router)
+    router.include_router(admin_progress_router)
 
     # Пользовательские роутеры
     router.include_router(main_menu_router)

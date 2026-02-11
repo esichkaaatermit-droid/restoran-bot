@@ -32,15 +32,12 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
     """Главное меню админ-панели"""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="👥 Сотрудники", callback_data="admin:users")],
+            [InlineKeyboardButton(text="📊 Прогресс обучения", callback_data="admin:progress")],
             [InlineKeyboardButton(text="🚫 Стоп-лист", callback_data="admin:stop_list")],
             [InlineKeyboardButton(text="✅ Go-лист", callback_data="admin:go_list")],
-            [InlineKeyboardButton(text="📸 Фото блюд", callback_data="admin:photos")],
-            [InlineKeyboardButton(text="📄 Файлы обучения", callback_data="admin:files")],
+            [InlineKeyboardButton(text="🍽 Меню", callback_data="admin:menu")],
             [InlineKeyboardButton(text="📝 Аттестация вкл/выкл", callback_data="admin:attest")],
-            [InlineKeyboardButton(text="📢 Рассылка", callback_data="admin:broadcast")],
             [InlineKeyboardButton(text="🔄 Синхронизация", callback_data="admin:sync")],
-            [InlineKeyboardButton(text="📊 Статистика", callback_data="admin:stats")],
         ]
     )
 
@@ -52,7 +49,6 @@ def get_admin_users_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📋 Список сотрудников", callback_data="admin_users:list")],
-            [InlineKeyboardButton(text="➕ Добавить сотрудника", callback_data="admin_users:add")],
             [InlineKeyboardButton(text="◀️ Назад", callback_data="admin:back")],
         ]
     )
@@ -158,6 +154,7 @@ def get_stopgo_action_keyboard(list_type: str) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="➕ Добавить позицию", callback_data=f"admin_list:add:{list_type}")],
             [InlineKeyboardButton(text="➖ Убрать позицию", callback_data=f"admin_list:remove:{list_type}")],
             [InlineKeyboardButton(text="📢 Рассылка сотрудникам", callback_data=f"admin_list:broadcast:{list_type}")],
+            [InlineKeyboardButton(text="🔄 Синхронизация", callback_data="admin:sync")],
             [InlineKeyboardButton(text="◀️ Назад", callback_data="admin:back")],
         ]
     )

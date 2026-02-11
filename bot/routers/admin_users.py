@@ -1,28 +1,18 @@
 """Управление сотрудниками (админ)"""
 
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, Message
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery
 
 from database.database import async_session_maker
 from database.repositories import UserRepository
-from database.models import UserRole
 from bot.keyboards.admin_keyboards import (
     get_admin_users_keyboard,
     get_users_list_keyboard,
     get_user_detail_keyboard,
-    get_role_selection_keyboard,
 )
 from bot.utils import get_role_name
 
 router = Router()
-
-
-class AddUserStates(StatesGroup):
-    full_name = State()
-    phone = State()
-    role = State()
 
 
 # ========== МЕНЮ СОТРУДНИКОВ ==========
@@ -195,102 +185,3 @@ async def admin_user_unbind(callback: CallbackQuery, user=None):
             reply_markup=get_user_detail_keyboard(target_user),
             parse_mode="HTML",
         )
-
-
-# ========== ДОБАВЛЕНИЕ СОТРУДНИКА ==========
-
-@router.callback_query(F.data == "admin_users:add")
-async def admin_add_user_start(callback: CallbackQuery, state: FSMContext, user=None):
-    """Начать добавление сотрудника"""
-    await callback.answer()
-    if not user or user.role.value != "manager":
-        return
-
-    await state.set_state(AddUserStates.full_name)
-    await callback.message.edit_text(
-        "➕ <b>Добавление сотрудника</b>\n\n"
-        "Введите ФИО сотрудника:",
-        parse_mode="HTML",
-    )
-
-
-@router.message(AddUserStates.full_name)
-async def admin_add_user_name(message: Message, state: FSMContext, user=None):
-    """Получить ФИО"""
-    if not user or user.role.value != "manager":
-        await state.clear()
-        return
-
-    await state.update_data(full_name=message.text.strip())
-    await state.set_state(AddUserStates.phone)
-    await message.answer(
-        "📞 Введите номер телефона сотрудника\n"
-        "(в любом формате, например: +79991234567):"
-    )
-
-
-@router.message(AddUserStates.phone)
-async def admin_add_user_phone(message: Message, state: FSMContext, user=None):
-    """Получить телефон"""
-    if not user or user.role.value != "manager":
-        await state.clear()
-        return
-
-    phone = message.text.strip()
-    digits = "".join(filter(str.isdigit, phone))
-
-    if len(digits) < 10:
-        await message.answer("❌ Введите корректный номер телефона (минимум 10 цифр):")
-        return
-
-    await state.update_data(phone=phone)
-    await state.set_state(AddUserStates.role)
-    await message.answer(
-        "🏷 Выберите должность:",
-        reply_markup=get_role_selection_keyboard(),
-    )
-
-
-@router.callback_query(F.data.startswith("admin_add_role:"), AddUserStates.role)
-async def admin_add_user_role(callback: CallbackQuery, state: FSMContext, user=None):
-    """Получить роль и создать сотрудника"""
-    await callback.answer()
-    if not user or user.role.value != "manager":
-        await state.clear()
-        return
-
-    role_str = callback.data.split(":")[1]
-    role = UserRole(role_str)
-
-    data = await state.get_data()
-    await state.clear()
-
-    async with async_session_maker() as session:
-        user_repo = UserRepository(session)
-
-        # Проверяем, нет ли уже такого телефона
-        existing = await user_repo.get_by_phone_any(data["phone"])
-        if existing:
-            await callback.message.edit_text(
-                f"❌ Сотрудник с таким номером уже существует:\n"
-                f"{existing.full_name} ({get_role_name(existing.role)})",
-                reply_markup=get_admin_users_keyboard(),
-                parse_mode="HTML",
-            )
-            return
-
-        new_user = await user_repo.create(
-            full_name=data["full_name"],
-            phone=data["phone"],
-            role=role,
-            branch=user.branch,
-        )
-
-    await callback.message.edit_text(
-        f"✅ Сотрудник добавлен:\n\n"
-        f"👤 {new_user.full_name}\n"
-        f"📞 {new_user.phone}\n"
-        f"🏷 {get_role_name(new_user.role)}",
-        reply_markup=get_admin_users_keyboard(),
-        parse_mode="HTML",
-    )

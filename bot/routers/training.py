@@ -1,5 +1,6 @@
+from pathlib import Path
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 
 from database.database import async_session_maker
 from database.repositories import TrainingRepository
@@ -69,11 +70,45 @@ async def show_material(callback: CallbackQuery, user=None):
     if progress and progress.is_completed:
         text += "\n\n✅ <i>Вы уже изучили этот материал</i>"
     
-    await callback.message.edit_text(
-        text,
-        reply_markup=get_mark_completed_keyboard(material_id),
-        parse_mode="HTML"
-    )
+    # Если есть файл - отправляем его
+    if material.file_path:
+        # Удаляем старое сообщение
+        await callback.message.delete()
+        
+        file_path = Path(material.file_path)
+        
+        # Проверяем, это file_id или путь к файлу
+        if file_path.exists():
+            # Локальный файл - отправляем
+            await callback.message.answer_document(
+                document=FSInputFile(file_path),
+                caption=text,
+                reply_markup=get_mark_completed_keyboard(material_id),
+                parse_mode="HTML"
+            )
+        else:
+            # Это file_id от Telegram
+            try:
+                await callback.message.answer_document(
+                    document=material.file_path,
+                    caption=text,
+                    reply_markup=get_mark_completed_keyboard(material_id),
+                    parse_mode="HTML"
+                )
+            except Exception:
+                # Если file_id недействителен, показываем только текст
+                await callback.message.answer(
+                    text + "\n\n⚠️ <i>Файл недоступен</i>",
+                    reply_markup=get_mark_completed_keyboard(material_id),
+                    parse_mode="HTML"
+                )
+    else:
+        # Нет файла - просто текст
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_mark_completed_keyboard(material_id),
+            parse_mode="HTML"
+        )
 
 
 @router.callback_query(F.data.startswith("training_complete:"))
@@ -100,11 +135,27 @@ async def mark_completed(callback: CallbackQuery, user=None):
         text += f"{material.content}"
         text += "\n\n✅ <i>Вы изучили этот материал</i>"
         
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_mark_completed_keyboard(material_id),
-            parse_mode="HTML"
-        )
+        # Если есть файл, просто обновляем caption
+        if material.file_path:
+            try:
+                await callback.message.edit_caption(
+                    caption=text,
+                    reply_markup=get_mark_completed_keyboard(material_id),
+                    parse_mode="HTML"
+                )
+            except Exception:
+                # Если не получилось отредактировать (нет медиа), просто показываем текст
+                await callback.message.edit_text(
+                    text,
+                    reply_markup=get_mark_completed_keyboard(material_id),
+                    parse_mode="HTML"
+                )
+        else:
+            await callback.message.edit_text(
+                text,
+                reply_markup=get_mark_completed_keyboard(material_id),
+                parse_mode="HTML"
+            )
 
 
 @router.callback_query(F.data == "training_back_to_list")

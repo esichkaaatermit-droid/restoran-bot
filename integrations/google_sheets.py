@@ -18,6 +18,10 @@
 
 import logging
 from typing import List, Dict, Any, Optional, Tuple
+import re
+import aiohttp
+import asyncio
+from pathlib import Path
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -26,6 +30,10 @@ from config import settings
 from database.models import MenuType, MenuItemStatus, UserRole
 
 logger = logging.getLogger(__name__)
+
+# Папка для временного хранения файлов
+TEMP_FILES_DIR = Path(__file__).parent.parent / "temp_files"
+TEMP_FILES_DIR.mkdir(exist_ok=True)
 
 # Маппинг листов меню → (menu_type, category)
 MENU_SHEETS = {
@@ -65,6 +73,76 @@ class GoogleSheetsSync:
 
     def __init__(self):
         self.spreadsheet = None
+    
+    @staticmethod
+    def convert_drive_url_to_direct(url: str) -> Optional[str]:
+        """
+        Преобразовать Google Drive ссылку в прямую ссылку для скачивания
+        
+        Поддерживаемые форматы:
+        - https://drive.google.com/file/d/FILE_ID/view
+        - https://drive.google.com/open?id=FILE_ID
+        - Прямые ссылки (возвращаются как есть)
+        """
+        if not url:
+            return None
+        
+        # Проверяем, что это Google Drive ссылка
+        if "drive.google.com" not in url:
+            # Если это уже прямая ссылка - возвращаем как есть
+            return url
+        
+        # Извлекаем file_id из разных форматов Google Drive ссылок
+        patterns = [
+            r'/file/d/([a-zA-Z0-9_-]+)',  # /file/d/FILE_ID/view
+            r'id=([a-zA-Z0-9_-]+)',       # ?id=FILE_ID
+            r'/d/([a-zA-Z0-9_-]+)',       # /d/FILE_ID
+        ]
+        
+        file_id = None
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                file_id = match.group(1)
+                break
+        
+        if not file_id:
+            logger.warning(f"Не удалось извлечь file_id из ссылки: {url}")
+            return None
+        
+        # Формируем прямую ссылку для скачивания
+        direct_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        return direct_url
+    
+    @staticmethod
+    async def download_file(url: str, destination: Path) -> bool:
+        """
+        Скачать файл по ссылке
+        
+        Args:
+            url: URL файла
+            destination: Путь для сохранения
+        
+        Returns:
+            True если успешно, False иначе
+        """
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                    if response.status != 200:
+                        logger.error(f"Ошибка скачивания файла: HTTP {response.status}")
+                        return False
+                    
+                    # Сохраняем файл
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    with open(destination, 'wb') as f:
+                        f.write(await response.read())
+                    
+                    logger.info(f"Файл скачан: {destination}")
+                    return True
+        except Exception as e:
+            logger.error(f"Ошибка скачивания файла {url}: {e}")
+            return False
 
     def connect(self) -> bool:
         """Подключиться к Google Sheets"""
@@ -217,6 +295,38 @@ class GoogleSheetsSync:
         logger.info(f"Прочитано {len(employees)} сотрудников из Google Sheets")
         return employees
 
+    @staticmethod
+    def _normalize_phone(phone: str) -> str:
+        """Нормализация номера телефона для сравнения (как в UserRepository)"""
+        digits = "".join(filter(str.isdigit, phone))
+        if digits.startswith("8") and len(digits) == 11:
+            digits = "7" + digits[1:]
+        if len(digits) == 10:
+            digits = "7" + digits
+        return digits
+
+    def find_employee_by_phone(self, phone: str) -> Optional[Dict[str, Any]]:
+        """
+        Найти сотрудника по телефону в таблице "Доступ".
+        Возвращает dict с данными сотрудника или None если не найден.
+        """
+        if not self.connect():
+            return None
+
+        normalized_input = self._normalize_phone(phone)
+        if len(normalized_input) < 10:
+            return None
+
+        employees = self.read_employees()
+        for emp in employees:
+            if not emp.get("phone"):
+                continue
+            normalized_emp = self._normalize_phone(emp["phone"])
+            if normalized_emp == normalized_input and emp.get("is_active", True):
+                return emp
+
+        return None
+
     # ========== МЕНЮ ==========
 
     def read_menu(self) -> List[Dict[str, Any]]:
@@ -267,6 +377,8 @@ class GoogleSheetsSync:
         - Обучение официанты
         - Обучение бармены
         - Обучение менеджеры
+        
+        Поддерживает столбец "Ссылка на файл" для автоматической загрузки PDF из Google Drive
         """
         materials = []
         order_counter = {}
@@ -286,6 +398,10 @@ class GoogleSheetsSync:
 
                 order_counter[role_key] += 1
 
+                # Получаем ссылку на файл (Google Drive или прямая ссылка)
+                # Поддерживаем оба варианта названия колонки
+                file_url = str(row.get("Файл PDF", "") or row.get("Ссылка на файл", "")).strip() or None
+                
                 materials.append({
                     "title": title,
                     "description": str(row.get("Краткое описание", "")).strip() or None,
@@ -294,6 +410,7 @@ class GoogleSheetsSync:
                     "role": role,
                     "order_num": order_counter[role_key],
                     "branch": settings.DEFAULT_BRANCH,
+                    "file_url": file_url,  # Новое поле
                 })
 
         logger.info(f"Прочитано {len(materials)} обучающих материалов из Google Sheets")
@@ -530,13 +647,44 @@ class GoogleSheetsSync:
 
                 await training_repo.delete_all_by_branch(branch)
 
+                # Обрабатываем ссылки на файлы
+                files_downloaded = 0
                 for mat_data in materials:
                     title_lower = mat_data["title"].lower()
-                    if title_lower in file_map:
-                        mat_data["file_path"] = file_map[title_lower]
+                    
+                    # Если есть ссылка на файл - скачиваем
+                    if mat_data.get("file_url"):
+                        direct_url = self.convert_drive_url_to_direct(mat_data["file_url"])
+                        if direct_url:
+                            # Создаем путь для сохранения
+                            safe_title = "".join(c for c in mat_data["title"] if c.isalnum() or c in (' ', '_')).rstrip()
+                            file_path = TEMP_FILES_DIR / f"{safe_title}.pdf"
+                            
+                            # Скачиваем файл
+                            if await self.download_file(direct_url, file_path):
+                                mat_data["file_path"] = str(file_path)
+                                files_downloaded += 1
+                            else:
+                                # Если не удалось скачать, пытаемся использовать старый файл
+                                if title_lower in file_map:
+                                    mat_data["file_path"] = file_map[title_lower]
+                        else:
+                            # Если не удалось преобразовать ссылку, используем старый файл
+                            if title_lower in file_map:
+                                mat_data["file_path"] = file_map[title_lower]
+                    else:
+                        # Если нет ссылки, сохраняем старый файл если был
+                        if title_lower in file_map:
+                            mat_data["file_path"] = file_map[title_lower]
+                    
+                    # Удаляем временное поле
+                    mat_data.pop("file_url", None)
 
                 count = await training_repo.bulk_create(materials)
-                report["details"]["training"] = {"count": count}
+                report["details"]["training"] = {
+                    "count": count,
+                    "files_downloaded": files_downloaded
+                }
         except Exception as e:
             logger.error(f"Ошибка синхронизации обучения: {e}")
             report["details"]["training"] = {"error": str(e)}

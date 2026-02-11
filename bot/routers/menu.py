@@ -1,7 +1,9 @@
 from pathlib import Path
 
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, FSInputFile
+from aiogram.types import CallbackQuery, Message, FSInputFile
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 
 from database.database import async_session_maker
 from database.repositories import MenuRepository
@@ -19,6 +21,13 @@ from bot.keyboards.keyboards import (
 )
 
 router = Router()
+
+# Папка для фото блюд
+PHOTOS_DIR = Path(__file__).parent.parent.parent / "photos"
+
+
+class MenuPhotoUploadStates(StatesGroup):
+    waiting_photo = State()
 
 
 @router.callback_query(F.data.startswith("menu_type:"))
@@ -152,6 +161,8 @@ async def show_item(callback: CallbackQuery, user=None):
     card_text += f"💰 <b>Цена:</b> {item.price:.0f} ₽"
     
     menu_type = "kitchen" if item.menu_type == MenuType.KITCHEN else "bar"
+    is_manager = user and user.role.value == "manager"
+    kb = get_item_back_keyboard(menu_type, item.category, item_id=item.id, is_manager=is_manager)
     
     # Если есть фото — отправляем с фото
     if item.photo:
@@ -163,20 +174,99 @@ async def show_item(callback: CallbackQuery, user=None):
             await callback.message.answer_photo(
                 photo=FSInputFile(photo_path),
                 caption=card_text,
-                reply_markup=get_item_back_keyboard(menu_type, item.category),
+                reply_markup=kb,
                 parse_mode="HTML"
             )
         else:
             # Файл не найден — отправляем без фото
             await callback.message.edit_text(
                 card_text,
-                reply_markup=get_item_back_keyboard(menu_type, item.category),
+                reply_markup=kb,
                 parse_mode="HTML"
             )
     else:
         # Нет фото — отправляем только текст
         await callback.message.edit_text(
             card_text,
-            reply_markup=get_item_back_keyboard(menu_type, item.category),
+            reply_markup=kb,
             parse_mode="HTML"
         )
+
+
+# ========== ЗАГРУЗКА ФОТО ИЗ КАРТОЧКИ БЛЮДА ==========
+
+@router.callback_query(F.data.startswith("menu_upload_photo:"))
+async def menu_upload_photo_start(callback: CallbackQuery, state: FSMContext, user=None):
+    """Начать загрузку фото из карточки блюда"""
+    await callback.answer()
+    if not user or user.role.value != "manager":
+        return
+
+    item_id = int(callback.data.split(":")[1])
+
+    async with async_session_maker() as session:
+        menu_repo = MenuRepository(session)
+        item = await menu_repo.get_by_id(item_id)
+
+    if not item:
+        await callback.message.answer("❌ Блюдо не найдено.")
+        return
+
+    await state.update_data(photo_item_id=item_id, photo_item_name=item.name,
+                            photo_menu_type="kitchen" if item.menu_type == MenuType.KITCHEN else "bar",
+                            photo_category=item.category)
+    await state.set_state(MenuPhotoUploadStates.waiting_photo)
+
+    await callback.message.answer(
+        f"📸 Отправьте фото для <b>{item.name}</b>:\n\n"
+        "Или нажмите /cancel для отмены.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(MenuPhotoUploadStates.waiting_photo, F.photo)
+async def menu_upload_photo_receive(message: Message, state: FSMContext, user=None):
+    """Получить и сохранить фото блюда"""
+    if not user or user.role.value != "manager":
+        await state.clear()
+        return
+
+    data = await state.get_data()
+    item_id = data.get("photo_item_id")
+    item_name = data.get("photo_item_name", "Блюдо")
+    await state.clear()
+
+    # Получаем файл
+    file_id = message.photo[-1].file_id
+    file = await message.bot.get_file(file_id)
+
+    # Создаём папку для фото, если её нет
+    PHOTOS_DIR.mkdir(exist_ok=True)
+
+    # Скачиваем фото
+    file_path = PHOTOS_DIR / f"{item_id}.jpg"
+    await message.bot.download_file(file.file_path, file_path)
+
+    # Сохраняем путь в базу данных
+    async with async_session_maker() as session:
+        menu_repo = MenuRepository(session)
+        item = await menu_repo.update(item_id, photo=str(file_path))
+
+    if item:
+        await message.answer(
+            f"✅ Фото для <b>{item_name}</b> сохранено!",
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer("❌ Блюдо не найдено.")
+
+
+@router.message(MenuPhotoUploadStates.waiting_photo)
+async def menu_upload_photo_invalid(message: Message, state: FSMContext, user=None):
+    """Если отправлено не фото"""
+    if message.text and message.text.lower() == "/cancel":
+        await state.clear()
+        await message.answer("❌ Загрузка фото отменена.")
+        return
+
+    await message.answer("📸 Пожалуйста, отправьте фото (изображение), или /cancel для отмены.")

@@ -10,6 +10,7 @@ from database.database import async_session_maker
 from database.repositories import UserRepository
 from bot.keyboards.admin_keyboards import get_main_menu_keyboard
 from bot.utils import get_role_name
+from integrations.google_sheets import GoogleSheetsSync
 
 # Путь к логотипу
 LOGO_PATH = Path(__file__).parent.parent / "assets" / "logo.png"
@@ -140,6 +141,25 @@ async def process_phone(message: Message, state: FSMContext):
         user = await user_repo.get_by_phone(phone)
 
         if user:
+            # Таблица «Доступ» — источник правды: обновляем БД из таблицы
+            sync = GoogleSheetsSync()
+            employee = sync.find_employee_by_phone(phone)
+            if employee:
+                await user_repo.update(
+                    user.id,
+                    full_name=employee["full_name"],
+                    role=employee["role"],
+                    branch=employee["branch"],
+                    is_active=employee.get("is_active", True),
+                )
+                user = await user_repo.get_by_id(user.id)
+                if not user or not user.is_active:
+                    await message.answer(
+                        "❌ Ваш доступ деактивирован. Обратитесь к менеджеру."
+                    )
+                    await state.clear()
+                    return
+
             await user_repo.bind_telegram(user.id, telegram_id)
 
             caption = (
@@ -193,11 +213,62 @@ async def process_phone(message: Message, state: FSMContext):
                     "Пожалуйста, обратитесь к Вашему менеджеру."
                 )
             else:
-                await message.answer(
-                    "Пользователь с таким номером не найден. "
-                    "Пожалуйста, обратитесь к Вашему менеджеру.\n\n"
-                    "Вы можете попробовать ввести номер ещё раз или связаться с администратором."
-                )
+                # Проверяем таблицу "Доступ" — может сотрудник только что добавлен
+                sync = GoogleSheetsSync()
+                employee = sync.find_employee_by_phone(phone)
+                if employee:
+                    new_user = await user_repo.create(
+                        full_name=employee["full_name"],
+                        phone=phone,
+                        role=employee["role"],
+                        branch=employee["branch"],
+                        telegram_username=None,
+                    )
+                    await user_repo.bind_telegram(new_user.id, telegram_id)
+                    caption = (
+                        "✅ <b>Спасибо, доступ подтверждён!</b>\n"
+                        "Вы найдены в таблице сотрудников.\n\n"
+                        f"👤 <b>Вы авторизованы как:</b> {new_user.full_name}\n"
+                        f"💼 <b>Должность:</b> {get_role_name(new_user.role)}\n"
+                        f"📍 <b>Филиал:</b> {new_user.branch}"
+                    )
+                    if LOGO_PATH.exists():
+                        await message.answer_photo(
+                            photo=FSInputFile(LOGO_PATH),
+                            caption=caption,
+                            reply_markup=get_main_menu_keyboard(),
+                        )
+                    else:
+                        await message.answer(
+                            caption,
+                            reply_markup=get_main_menu_keyboard(),
+                        )
+                    if new_user.role.value == "manager":
+                        await message.answer(
+                            "🔑 Для доступа к панели управления используйте /admin"
+                        )
+                    await state.clear()
+                    try:
+                        managers = await user_repo.get_all_with_telegram()
+                        for mgr in managers:
+                            if mgr.role.value == "manager" and mgr.id != new_user.id:
+                                try:
+                                    await message.bot.send_message(
+                                        mgr.telegram_id,
+                                        f"ℹ️ Сотрудник <b>{new_user.full_name}</b> "
+                                        f"({get_role_name(new_user.role)}) привязал Telegram.",
+                                        parse_mode="HTML",
+                                    )
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+                else:
+                    await message.answer(
+                        "Пользователь с таким номером не найден. "
+                        "Пожалуйста, обратитесь к Вашему менеджеру.\n\n"
+                        "Вы можете попробовать ввести номер ещё раз или связаться с администратором."
+                    )
 
 
 @router.callback_query(F.data == "back_to_main")
