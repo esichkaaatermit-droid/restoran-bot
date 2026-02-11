@@ -119,31 +119,40 @@ class TestRepository:
         
         return results
     
-    async def create_test(self, **kwargs) -> Test:
+    async def create_test(self, commit: bool = True, **kwargs) -> Test:
         """Создать тест"""
         test = Test(**kwargs)
         self.session.add(test)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         await self.session.refresh(test)
         return test
     
-    async def add_question(self, test_id: int, text: str, order_num: int = 0) -> Question:
+    async def add_question(self, test_id: int, text: str, order_num: int = 0, commit: bool = True) -> Question:
         """Добавить вопрос к тесту"""
         question = Question(test_id=test_id, text=text, order_num=order_num)
         self.session.add(question)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         await self.session.refresh(question)
         return question
     
-    async def add_answer(self, question_id: int, text: str, is_correct: bool = False) -> Answer:
+    async def add_answer(self, question_id: int, text: str, is_correct: bool = False, commit: bool = True) -> Answer:
         """Добавить вариант ответа"""
         answer = Answer(question_id=question_id, text=text, is_correct=is_correct)
         self.session.add(answer)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         await self.session.refresh(answer)
         return answer
     
-    async def delete_all_by_branch(self, branch: str) -> int:
+    async def delete_all_by_branch(self, branch: str, commit: bool = True) -> int:
         """Удалить все тесты для филиала (с каскадным удалением вопросов и ответов)"""
         # Получаем ID тестов
         tests = await self.session.execute(
@@ -171,7 +180,8 @@ class TestRepository:
         result = await self.session.execute(
             delete(Test).where(Test.id.in_(test_ids))
         )
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return result.rowcount
     
     async def get_all_tests(self, branch: Optional[str] = None) -> List[Test]:

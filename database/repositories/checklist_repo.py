@@ -53,20 +53,22 @@ class ChecklistRepository:
         )
         return list(result.scalars().all())
 
-    async def delete_all_by_branch(self, branch: str) -> int:
+    async def delete_all_by_branch(self, branch: str, commit: bool = True) -> int:
         """Удалить все пункты чек-листа для филиала"""
         result = await self.session.execute(
             delete(ChecklistItem).where(ChecklistItem.branch == branch)
         )
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return result.rowcount
 
-    async def bulk_create(self, items: List[dict]) -> int:
+    async def bulk_create(self, items: List[dict], commit: bool = True) -> int:
         """Массовое создание пунктов чек-листа"""
         for item_data in items:
             item = ChecklistItem(**item_data)
             self.session.add(item)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return len(items)
 
     async def count_by_role(self, role: UserRole, branch: Optional[str] = None) -> int:

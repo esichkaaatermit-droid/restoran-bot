@@ -108,20 +108,22 @@ class TrainingRepository:
         await self.session.refresh(material)
         return material
     
-    async def delete_all_by_branch(self, branch: str) -> int:
+    async def delete_all_by_branch(self, branch: str, commit: bool = True) -> int:
         """Удалить все материалы для филиала"""
         result = await self.session.execute(
             delete(TrainingMaterial).where(TrainingMaterial.branch == branch)
         )
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return result.rowcount
     
-    async def bulk_create(self, materials: List[dict]) -> int:
+    async def bulk_create(self, materials: List[dict], commit: bool = True) -> int:
         """Массовое создание материалов"""
         for mat_data in materials:
             material = TrainingMaterial(**mat_data)
             self.session.add(material)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return len(materials)
     
     async def get_all(self, branch: Optional[str] = None) -> List[TrainingMaterial]:

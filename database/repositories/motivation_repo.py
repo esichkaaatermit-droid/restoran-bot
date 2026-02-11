@@ -43,20 +43,22 @@ class MotivationRepository:
         await self.session.refresh(message)
         return message
     
-    async def bulk_create(self, texts: List[str]) -> int:
+    async def bulk_create(self, texts: List[str], commit: bool = True) -> int:
         """Массовое создание сообщений"""
         for text in texts:
             message = MotivationMessage(text=text, is_active=True)
             self.session.add(message)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return len(texts)
     
-    async def delete_all(self) -> int:
+    async def delete_all(self, commit: bool = True) -> int:
         """Удалить все мотивационные сообщения"""
         result = await self.session.execute(
             delete(MotivationMessage)
         )
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return result.rowcount
 
     async def update(self, message_id: int, text: str = None, is_active: bool = None) -> Optional[MotivationMessage]:

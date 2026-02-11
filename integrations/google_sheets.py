@@ -604,7 +604,7 @@ class GoogleSheetsSync:
             logger.error(f"Ошибка синхронизации сотрудников: {e}")
             report["details"]["employees"] = {"error": str(e)}
 
-        # 2. Синхронизация меню
+        # 2. Синхронизация меню (атомарная транзакция)
         try:
             async with async_session_maker() as session:
                 menu_items = self.read_menu()
@@ -618,7 +618,7 @@ class GoogleSheetsSync:
                     if item.photo:
                         photo_map[item.name.lower()] = item.photo
 
-                await menu_repo.delete_all_by_branch(branch)
+                await menu_repo.delete_all_by_branch(branch, commit=False)
 
                 for item_data in menu_items:
                     name_lower = item_data["name"].lower()
@@ -627,7 +627,8 @@ class GoogleSheetsSync:
                     if name_lower in photo_map:
                         item_data["photo"] = photo_map[name_lower]
 
-                count = await menu_repo.bulk_create(menu_items)
+                count = await menu_repo.bulk_create(menu_items, commit=False)
+                await session.commit()
                 report["details"]["menu"] = {"count": count}
         except Exception as e:
             logger.error(f"Ошибка синхронизации меню: {e}")
@@ -645,7 +646,7 @@ class GoogleSheetsSync:
                     if mat.file_path:
                         file_map[mat.title.lower()] = mat.file_path
 
-                await training_repo.delete_all_by_branch(branch)
+                await training_repo.delete_all_by_branch(branch, commit=False)
 
                 # Обрабатываем ссылки на файлы
                 files_downloaded = 0
@@ -680,7 +681,8 @@ class GoogleSheetsSync:
                     # Удаляем временное поле
                     mat_data.pop("file_url", None)
 
-                count = await training_repo.bulk_create(materials)
+                count = await training_repo.bulk_create(materials, commit=False)
+                await session.commit()
                 report["details"]["training"] = {
                     "count": count,
                     "files_downloaded": files_downloaded
@@ -695,7 +697,7 @@ class GoogleSheetsSync:
                 tests, questions_map = self.read_tests()
                 test_repo = TestRepository(session)
 
-                await test_repo.delete_all_by_branch(branch)
+                await test_repo.delete_all_by_branch(branch, commit=False)
 
                 test_count = 0
                 question_count = 0
@@ -709,6 +711,7 @@ class GoogleSheetsSync:
                     map_key = f"{test_data['title']}|{role_str}"
 
                     test = await test_repo.create_test(
+                        commit=False,
                         title=test_data["title"],
                         role=test_data["role"],
                         passing_score=test_data["passing_score"],
@@ -724,6 +727,7 @@ class GoogleSheetsSync:
                             test_id=test.id,
                             text=q_data["text"],
                             order_num=q_data["order_num"],
+                            commit=False,
                         )
                         question_count += 1
 
@@ -732,8 +736,10 @@ class GoogleSheetsSync:
                                 question_id=question.id,
                                 text=a_data["text"],
                                 is_correct=a_data["is_correct"],
+                                commit=False,
                             )
 
+                await session.commit()
                 report["details"]["tests"] = {
                     "tests": test_count,
                     "questions": question_count,
@@ -748,15 +754,16 @@ class GoogleSheetsSync:
                 checklists = self.read_checklists()
                 checklist_repo = ChecklistRepository(session)
 
-                await checklist_repo.delete_all_by_branch(branch)
+                await checklist_repo.delete_all_by_branch(branch, commit=False)
 
                 total_items = 0
                 for role_value, items in checklists.items():
                     for item in items:
                         item["branch"] = branch
-                    count = await checklist_repo.bulk_create(items)
+                    count = await checklist_repo.bulk_create(items, commit=False)
                     total_items += count
 
+                await session.commit()
                 report["details"]["checklists"] = {"count": total_items}
         except Exception as e:
             logger.error(f"Ошибка синхронизации чек-листов: {e}")
@@ -768,8 +775,9 @@ class GoogleSheetsSync:
                 messages = self.read_motivation()
                 motivation_repo = MotivationRepository(session)
 
-                await motivation_repo.delete_all()
-                count = await motivation_repo.bulk_create(messages)
+                await motivation_repo.delete_all(commit=False)
+                count = await motivation_repo.bulk_create(messages, commit=False)
+                await session.commit()
                 report["details"]["motivation"] = {"count": count}
         except Exception as e:
             logger.error(f"Ошибка синхронизации мотивации: {e}")

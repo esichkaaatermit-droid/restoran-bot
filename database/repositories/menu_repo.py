@@ -135,20 +135,22 @@ class MenuRepository:
         await self.session.commit()
         return True
     
-    async def delete_all_by_branch(self, branch: str) -> int:
+    async def delete_all_by_branch(self, branch: str, commit: bool = True) -> int:
         """Удалить все позиции меню для филиала (для переимпорта)"""
         result = await self.session.execute(
             delete(MenuItem).where(MenuItem.branch == branch)
         )
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return result.rowcount
     
-    async def bulk_create(self, items: List[dict]) -> int:
+    async def bulk_create(self, items: List[dict], commit: bool = True) -> int:
         """Массовое создание позиций"""
         for item_data in items:
             item = MenuItem(**item_data)
             self.session.add(item)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return len(items)
     
     async def get_all(self, branch: Optional[str] = None) -> List[MenuItem]:

@@ -20,6 +20,7 @@ async def show_stop_list(message: Message, user):
             "🚫 <b>Стоп-лист</b>\n\n"
             "Отличные новости! В данный момент стоп-лист пуст.\n"
             "Все позиции доступны для заказа.",
+            reply_markup=get_back_keyboard("back_to_main"),
             parse_mode="HTML"
         )
         return
@@ -59,6 +60,7 @@ async def show_stop_list(message: Message, user):
     
     await message.answer(
         text,
+        reply_markup=get_back_keyboard("back_to_main"),
         parse_mode="HTML"
     )
 
@@ -73,6 +75,7 @@ async def show_go_list(message: Message, user):
         await message.answer(
             "✅ <b>Go-лист</b>\n\n"
             "В данный момент нет приоритетных позиций для продажи.",
+            reply_markup=get_back_keyboard("back_to_main"),
             parse_mode="HTML"
         )
         return
@@ -114,5 +117,6 @@ async def show_go_list(message: Message, user):
     
     await message.answer(
         text,
+        reply_markup=get_back_keyboard("back_to_main"),
         parse_mode="HTML"
     )
