@@ -43,6 +43,15 @@ async def test_section(message: Message, user=None):
         )
         return
 
+    from bot.utils import are_tests_active
+    tests_on = await are_tests_active(user.branch)
+    if not tests_on:
+        await message.answer(
+            "📝 Аттестация сейчас не проводится.\n"
+            "Когда менеджер назначит тестирование, кнопка появится в меню."
+        )
+        return
+
     from bot.routers.tests import show_tests
     await show_tests(message, user)
 

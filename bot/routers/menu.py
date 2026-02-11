@@ -16,9 +16,8 @@ from bot.keyboards import (
 )
 from bot.keyboards.keyboards import (
     get_item_back_keyboard,
-    get_kitchen_categories_keyboard,
-    get_bar_categories_keyboard,
 )
+from bot.utils import safe_edit_or_send
 
 router = Router()
 
@@ -40,17 +39,27 @@ async def select_menu_type(callback: CallbackQuery, user=None):
         return
     
     menu_type = callback.data.split(":")[1]
-    
-    if menu_type == "kitchen":
-        await callback.message.edit_text(
-            "🍳 Меню кухни\n\nВыберите категорию:",
-            reply_markup=get_kitchen_categories_keyboard()
+    menu_type_enum = MenuType.KITCHEN if menu_type == "kitchen" else MenuType.BAR
+    emoji = "🍳" if menu_type == "kitchen" else "🍹"
+    label = "Меню кухни" if menu_type == "kitchen" else "Меню бара"
+
+    async with async_session_maker() as session:
+        menu_repo = MenuRepository(session)
+        categories = await menu_repo.get_categories(menu_type_enum, user.branch)
+
+    if not categories:
+        await safe_edit_or_send(
+            callback,
+            f"{emoji} {label}\n\nВ этом разделе пока нет позиций.",
+            reply_markup=get_back_keyboard("menu_back_to_types"),
         )
-    else:
-        await callback.message.edit_text(
-            "🍹 Меню бара\n\nВыберите категорию:",
-            reply_markup=get_bar_categories_keyboard()
-        )
+        return
+
+    await safe_edit_or_send(
+        callback,
+        f"{emoji} {label}\n\nВыберите категорию:",
+        reply_markup=get_categories_keyboard(categories, menu_type),
+    )
 
 
 @router.callback_query(F.data == "menu_back_to_types")
@@ -58,9 +67,10 @@ async def back_to_menu_types(callback: CallbackQuery, user=None):
     """Возврат к выбору типа меню"""
     await callback.answer()
     
-    await callback.message.edit_text(
+    await safe_edit_or_send(
+        callback,
         "Выберите раздел меню:",
-        reply_markup=get_menu_type_keyboard()
+        reply_markup=get_menu_type_keyboard(),
     )
 
 
@@ -73,17 +83,19 @@ async def back_to_categories(callback: CallbackQuery, user=None):
         return
     
     menu_type = callback.data.split(":")[1]
-    
-    if menu_type == "kitchen":
-        await callback.message.edit_text(
-            "🍳 Меню кухни\n\nВыберите категорию:",
-            reply_markup=get_kitchen_categories_keyboard()
-        )
-    else:
-        await callback.message.edit_text(
-            "🍹 Меню бара\n\nВыберите категорию:",
-            reply_markup=get_bar_categories_keyboard()
-        )
+    menu_type_enum = MenuType.KITCHEN if menu_type == "kitchen" else MenuType.BAR
+    emoji = "🍳" if menu_type == "kitchen" else "🍹"
+    label = "Меню кухни" if menu_type == "kitchen" else "Меню бара"
+
+    async with async_session_maker() as session:
+        menu_repo = MenuRepository(session)
+        categories = await menu_repo.get_categories(menu_type_enum, user.branch)
+
+    await safe_edit_or_send(
+        callback,
+        f"{emoji} {label}\n\nВыберите категорию:",
+        reply_markup=get_categories_keyboard(categories, menu_type),
+    )
 
 
 @router.callback_query(F.data.startswith("category:"))
@@ -103,21 +115,21 @@ async def select_category(callback: CallbackQuery, user=None):
     async with async_session_maker() as session:
         menu_repo = MenuRepository(session)
         items = await menu_repo.get_items_by_category(category, menu_type_enum, user.branch)
+        if not items:
+            categories = await menu_repo.get_categories(menu_type_enum, user.branch)
     
     if not items:
-        if menu_type == "kitchen":
-            keyboard = get_kitchen_categories_keyboard()
-        else:
-            keyboard = get_bar_categories_keyboard()
-        await callback.message.edit_text(
+        await safe_edit_or_send(
+            callback,
             f"В категории «{category}» пока нет доступных позиций.",
-            reply_markup=keyboard
+            reply_markup=get_categories_keyboard(categories, menu_type),
         )
         return
     
-    await callback.message.edit_text(
+    await safe_edit_or_send(
+        callback,
         f"📋 {category}\n\nВыберите позицию:",
-        reply_markup=get_items_keyboard(items, menu_type, category)
+        reply_markup=get_items_keyboard(items, menu_type, category),
     )
 
 
@@ -136,9 +148,10 @@ async def show_item(callback: CallbackQuery, user=None):
         item = await menu_repo.get_by_id(item_id)
     
     if not item:
-        await callback.message.edit_text(
+        await safe_edit_or_send(
+            callback,
             "Позиция не найдена.",
-            reply_markup=get_back_keyboard("menu_back_to_types")
+            reply_markup=get_back_keyboard("menu_back_to_types"),
         )
         return
     
@@ -168,9 +181,11 @@ async def show_item(callback: CallbackQuery, user=None):
     if item.photo:
         photo_path = Path(item.photo)
         if photo_path.exists():
-            # Удаляем старое сообщение
-            await callback.message.delete()
-            # Отправляем новое с фото
+            from aiogram.exceptions import TelegramBadRequest
+            try:
+                await callback.message.delete()
+            except TelegramBadRequest:
+                pass
             await callback.message.answer_photo(
                 photo=FSInputFile(photo_path),
                 caption=card_text,
@@ -178,19 +193,9 @@ async def show_item(callback: CallbackQuery, user=None):
                 parse_mode="HTML"
             )
         else:
-            # Файл не найден — отправляем без фото
-            await callback.message.edit_text(
-                card_text,
-                reply_markup=kb,
-                parse_mode="HTML"
-            )
+            await safe_edit_or_send(callback, card_text, reply_markup=kb)
     else:
-        # Нет фото — отправляем только текст
-        await callback.message.edit_text(
-            card_text,
-            reply_markup=kb,
-            parse_mode="HTML"
-        )
+        await safe_edit_or_send(callback, card_text, reply_markup=kb)
 
 
 # ========== ЗАГРУЗКА ФОТО ИЗ КАРТОЧКИ БЛЮДА ==========
@@ -217,9 +222,14 @@ async def menu_upload_photo_start(callback: CallbackQuery, state: FSMContext, us
                             photo_category=item.category)
     await state.set_state(MenuPhotoUploadStates.waiting_photo)
 
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data=f"menu_photo_cancel:{item_id}")]
+    ])
+
     await callback.message.answer(
-        f"📸 Отправьте фото для <b>{item.name}</b>:\n\n"
-        "Или нажмите /cancel для отмены.",
+        f"📸 Отправьте фото для <b>{item.name}</b>:",
+        reply_markup=cancel_kb,
         parse_mode="HTML",
     )
 
@@ -253,12 +263,35 @@ async def menu_upload_photo_receive(message: Message, state: FSMContext, user=No
         item = await menu_repo.update(item_id, photo=str(file_path))
 
     if item:
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        back_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="◀️ Назад к блюду", callback_data=f"item:{item_id}")]
+        ])
         await message.answer(
             f"✅ Фото для <b>{item_name}</b> сохранено!",
+            reply_markup=back_kb,
             parse_mode="HTML",
         )
     else:
         await message.answer("❌ Блюдо не найдено.")
+
+
+@router.callback_query(F.data.startswith("menu_photo_cancel:"))
+async def menu_upload_photo_cancel(callback: CallbackQuery, state: FSMContext, user=None):
+    """Отмена загрузки фото"""
+    await callback.answer()
+    await state.clear()
+    item_id = int(callback.data.split(":")[1])
+    await callback.message.edit_text("❌ Загрузка фото отменена.")
+
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ Назад к блюду", callback_data=f"item:{item_id}")]
+    ])
+    await callback.message.edit_text(
+        "❌ Загрузка фото отменена.",
+        reply_markup=back_kb,
+    )
 
 
 @router.message(MenuPhotoUploadStates.waiting_photo)
@@ -269,4 +302,4 @@ async def menu_upload_photo_invalid(message: Message, state: FSMContext, user=No
         await message.answer("❌ Загрузка фото отменена.")
         return
 
-    await message.answer("📸 Пожалуйста, отправьте фото (изображение), или /cancel для отмены.")
+    await message.answer("📸 Пожалуйста, отправьте фото (изображение).")

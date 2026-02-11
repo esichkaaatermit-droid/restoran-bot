@@ -144,3 +144,12 @@ async def admin_file_upload_video(message: Message, state: FSMContext, user=None
         )
     else:
         await message.answer("❌ Материал не найден.")
+
+
+@router.message(FileUploadStates.waiting_file)
+async def admin_file_upload_invalid(message: Message):
+    """Fallback: отправлен неподдерживаемый тип файла"""
+    await message.answer(
+        "Пожалуйста, отправьте документ или видео.\n"
+        "Другие типы сообщений не поддерживаются."
+    )

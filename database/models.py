@@ -12,6 +12,7 @@ from sqlalchemy import (
     Enum,
     Float,
     BigInteger,
+    Index,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -41,6 +42,11 @@ class MenuType(str, PyEnum):
 class User(Base):
     """Модель пользователя (сотрудника)"""
     __tablename__ = "users"
+    __table_args__ = (
+        Index("ix_users_phone", "phone"),
+        Index("ix_users_telegram_username", "telegram_username"),
+        Index("ix_users_branch_role", "branch", "role"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     telegram_id: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True, nullable=True)
@@ -60,6 +66,10 @@ class User(Base):
 class MenuItem(Base):
     """Модель позиции меню"""
     __tablename__ = "menu_items"
+    __table_args__ = (
+        Index("ix_menu_items_branch_type_category", "branch", "menu_type", "category"),
+        Index("ix_menu_items_branch_status", "branch", "status"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -103,6 +113,9 @@ class TrainingMaterial(Base):
 class TrainingProgress(Base):
     """Прогресс изучения материалов"""
     __tablename__ = "training_progress"
+    __table_args__ = (
+        Index("ix_training_progress_user_material", "user_id", "material_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -165,6 +178,9 @@ class Answer(Base):
 class TestResult(Base):
     """Результат прохождения теста"""
     __tablename__ = "test_results"
+    __table_args__ = (
+        Index("ix_test_results_user_test", "user_id", "test_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -194,6 +210,9 @@ class MotivationMessage(Base):
 class ChecklistItem(Base):
     """Пункт чек-листа для сотрудников"""
     __tablename__ = "checklist_items"
+    __table_args__ = (
+        Index("ix_checklist_items_branch_role", "branch", "role"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False)

@@ -12,14 +12,19 @@ from aiogram.types import (
 from database.models import MenuItem, User
 
 
-def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
+def get_main_menu_keyboard(tests_active: bool = True) -> ReplyKeyboardMarkup:
     """Главное меню для всех сотрудников"""
     buttons = [
         [KeyboardButton(text="🍽 Меню"), KeyboardButton(text="📚 Обучение")],
-        [KeyboardButton(text="📝 Аттестация"), KeyboardButton(text="📋 Чек-лист")],
-        [KeyboardButton(text="🚫 Стоп-лист"), KeyboardButton(text="✅ Go-лист")],
-        [KeyboardButton(text="💪 Мотивация")],
     ]
+    if tests_active:
+        buttons.append(
+            [KeyboardButton(text="📝 Аттестация"), KeyboardButton(text="📋 Чек-лист")]
+        )
+    else:
+        buttons.append([KeyboardButton(text="📋 Чек-лист")])
+    buttons.append([KeyboardButton(text="🚫 Стоп-лист"), KeyboardButton(text="✅ Go-лист")])
+    buttons.append([KeyboardButton(text="💪 Мотивация")])
 
     return ReplyKeyboardMarkup(
         keyboard=buttons,

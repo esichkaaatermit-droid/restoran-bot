@@ -37,7 +37,7 @@ async def admin_photos(callback: CallbackQuery, state: FSMContext, user=None):
     )
 
 
-@router.message(PhotoUploadStates.search)
+@router.message(PhotoUploadStates.search, F.text)
 async def admin_photos_search(message: Message, state: FSMContext, user=None):
     """Поиск блюда для фото"""
     if not user or user.role.value != "manager":
@@ -117,3 +117,15 @@ async def admin_photo_upload(message: Message, state: FSMContext, user=None):
         )
     else:
         await message.answer("❌ Блюдо не найдено.")
+
+
+@router.message(PhotoUploadStates.search)
+async def admin_photos_search_invalid(message: Message):
+    """Fallback: отправлено не текстовое сообщение при поиске"""
+    await message.answer("Пожалуйста, введите название блюда текстом.")
+
+
+@router.message(PhotoUploadStates.upload)
+async def admin_photo_upload_invalid(message: Message):
+    """Fallback: отправлено не фото"""
+    await message.answer("Пожалуйста, отправьте фото (изображение).")

@@ -1,9 +1,14 @@
 """Рассылка сообщений (админ)"""
 
+import asyncio
+import logging
+
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+
+logger = logging.getLogger(__name__)
 
 from database.database import async_session_maker
 from database.repositories import UserRepository
@@ -53,8 +58,9 @@ async def admin_broadcast_text(message: Message, state: FSMContext, user=None):
                 parse_mode="HTML",
             )
             sent += 1
-        except Exception:
-            pass
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            logger.warning(f"Рассылка: не удалось отправить {tg_user.full_name}: {e}")
 
     await message.answer(f"✅ Сообщение отправлено {sent} сотрудникам.")
 
@@ -85,7 +91,17 @@ async def admin_broadcast_photo(message: Message, state: FSMContext, user=None):
                 parse_mode="HTML",
             )
             sent += 1
-        except Exception:
-            pass
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            logger.warning(f"Рассылка фото: не удалось отправить {tg_user.full_name}: {e}")
 
     await message.answer(f"✅ Фото отправлено {sent} сотрудникам.")
+
+
+@router.message(BroadcastStates.message)
+async def admin_broadcast_invalid(message: Message):
+    """Fallback: неподдерживаемый тип контента"""
+    await message.answer(
+        "Для рассылки отправьте текст или фото с подписью.\n"
+        "Другие типы сообщений не поддерживаются."
+    )

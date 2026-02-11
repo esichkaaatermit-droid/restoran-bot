@@ -75,8 +75,8 @@ async def start_test(callback: CallbackQuery, state: FSMContext, user=None):
         
         if attempts >= test.max_attempts:
             await callback.message.edit_text(
-                f"Вы исчерпали все попытки ({test.max_attempts}) для этого теста.\n"
-                "Пожалуйста, обратитесь к менеджеру.",
+                f"📋 Вы использовали все {test.max_attempts} попытки для этого теста.\n"
+                "Чтобы пройти тест повторно, обратитесь к менеджеру.",
                 reply_markup=get_back_keyboard("tests_back_to_list")
             )
             return

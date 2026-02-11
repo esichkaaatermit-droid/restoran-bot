@@ -215,6 +215,14 @@ class GoogleSheetsSync:
             logger.error(f"Ошибка чтения листа '{sheet_name}': {e}")
             return []
 
+    async def _async_get_sheet_records(self, sheet_name: str) -> List[Dict[str, Any]]:
+        """Асинхронная обёртка для _get_sheet_records (не блокирует event loop)"""
+        return await asyncio.to_thread(self._get_sheet_records, sheet_name)
+
+    async def _async_connect(self) -> bool:
+        """Асинхронная обёртка для connect (не блокирует event loop)"""
+        return await asyncio.to_thread(self.connect)
+
     def _safe_float(self, value: Any) -> Optional[float]:
         """Безопасное преобразование в float"""
         if value is None or value == "":
@@ -548,7 +556,7 @@ class GoogleSheetsSync:
             ChecklistRepository,
         )
 
-        if not self.connect():
+        if not await self._async_connect():
             return {"success": False, "error": "Не удалось подключиться к Google Sheets"}
 
         report = {"success": True, "details": {}}
@@ -557,7 +565,7 @@ class GoogleSheetsSync:
         # 1. Синхронизация сотрудников
         try:
             async with async_session_maker() as session:
-                employees = self.read_employees()
+                employees = await asyncio.to_thread(self.read_employees)
                 user_repo = UserRepository(session)
                 created, updated, deactivated = 0, 0, 0
 
@@ -607,7 +615,7 @@ class GoogleSheetsSync:
         # 2. Синхронизация меню (атомарная транзакция)
         try:
             async with async_session_maker() as session:
-                menu_items = self.read_menu()
+                menu_items = await asyncio.to_thread(self.read_menu)
                 menu_repo = MenuRepository(session)
 
                 existing_items = await menu_repo.get_all(branch=branch)
@@ -637,7 +645,7 @@ class GoogleSheetsSync:
         # 3. Синхронизация обучения
         try:
             async with async_session_maker() as session:
-                materials = self.read_training()
+                materials = await asyncio.to_thread(self.read_training)
                 training_repo = TrainingRepository(session)
 
                 existing_materials = await training_repo.get_all(branch=branch)
@@ -694,7 +702,7 @@ class GoogleSheetsSync:
         # 4. Синхронизация тестов
         try:
             async with async_session_maker() as session:
-                tests, questions_map = self.read_tests()
+                tests, questions_map = await asyncio.to_thread(self.read_tests)
                 test_repo = TestRepository(session)
 
                 await test_repo.delete_all_by_branch(branch, commit=False)
@@ -751,7 +759,7 @@ class GoogleSheetsSync:
         # 5. Синхронизация чек-листов
         try:
             async with async_session_maker() as session:
-                checklists = self.read_checklists()
+                checklists = await asyncio.to_thread(self.read_checklists)
                 checklist_repo = ChecklistRepository(session)
 
                 await checklist_repo.delete_all_by_branch(branch, commit=False)
@@ -772,7 +780,7 @@ class GoogleSheetsSync:
         # 6. Синхронизация мотивации
         try:
             async with async_session_maker() as session:
-                messages = self.read_motivation()
+                messages = await asyncio.to_thread(self.read_motivation)
                 motivation_repo = MotivationRepository(session)
 
                 await motivation_repo.delete_all(commit=False)

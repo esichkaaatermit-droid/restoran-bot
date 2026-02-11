@@ -16,6 +16,14 @@ from .admin_attest import router as admin_attest_router
 from .admin_sync import router as admin_sync_router
 from .admin_progress import router as admin_progress_router
 
+# --- Неактивные роутеры (заготовки на будущее, не подключены) ---
+# Файлы сохранены, но не зарегистрированы по решению от 2026-02:
+#   admin_users.py    — ручное управление сотрудниками (заменено Google Sheets)
+#   admin_files.py    — загрузка файлов обучения (заменено Google Drive)
+#   admin_photos.py   — загрузка фото через отдельный раздел (заменено загрузкой из карточки)
+#   admin_broadcast.py — массовая рассылка (не в ТЗ пилота)
+#   admin_stats.py    — статистика (не в ТЗ пилота)
+
 
 def setup_routers() -> Router:
     """Настройка всех роутеров"""

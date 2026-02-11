@@ -8,8 +8,10 @@ from aiogram.fsm.state import State, StatesGroup
 
 from database.database import async_session_maker
 from database.repositories import UserRepository
+import asyncio
+
 from bot.keyboards.admin_keyboards import get_main_menu_keyboard
-from bot.utils import get_role_name
+from bot.utils import get_role_name, are_tests_active
 from integrations.google_sheets import GoogleSheetsSync
 
 # Путь к логотипу
@@ -28,6 +30,7 @@ async def cmd_start(message: Message, state: FSMContext, user=None):
     """Обработка команды /start"""
 
     if user:
+        tests_on = await are_tests_active(user.branch)
         caption = (
             f"<b>Приветствую Вас в нашем чат-боте!</b>\n"
             f"Рады видеть Вас в команде!\n\n"
@@ -39,12 +42,12 @@ async def cmd_start(message: Message, state: FSMContext, user=None):
             await message.answer_photo(
                 photo=FSInputFile(LOGO_PATH),
                 caption=caption,
-                reply_markup=get_main_menu_keyboard(),
+                reply_markup=get_main_menu_keyboard(tests_on),
             )
         else:
             await message.answer(
                 caption,
-                reply_markup=get_main_menu_keyboard(),
+                reply_markup=get_main_menu_keyboard(tests_on),
             )
 
         # Подсказка для менеджера
@@ -64,6 +67,7 @@ async def cmd_start(message: Message, state: FSMContext, user=None):
             found_user = await user_repo.get_by_username_unbound(tg_username)
             if found_user:
                 await user_repo.bind_telegram(found_user.id, message.from_user.id)
+                tests_on = await are_tests_active(found_user.branch)
                 caption = (
                     "✅ <b>Вы автоматически авторизованы!</b>\n"
                     "Ваш Telegram-аккаунт найден в системе.\n\n"
@@ -75,12 +79,12 @@ async def cmd_start(message: Message, state: FSMContext, user=None):
                     await message.answer_photo(
                         photo=FSInputFile(LOGO_PATH),
                         caption=caption,
-                        reply_markup=get_main_menu_keyboard(),
+                        reply_markup=get_main_menu_keyboard(tests_on),
                     )
                 else:
                     await message.answer(
                         caption,
-                        reply_markup=get_main_menu_keyboard(),
+                        reply_markup=get_main_menu_keyboard(tests_on),
                     )
                 if found_user.role.value == "manager":
                     await message.answer(
@@ -129,7 +133,7 @@ async def cmd_start(message: Message, state: FSMContext, user=None):
     await state.set_state(BindPhoneStates.waiting_for_phone)
 
 
-@router.message(BindPhoneStates.waiting_for_phone)
+@router.message(BindPhoneStates.waiting_for_phone, F.text)
 async def process_phone(message: Message, state: FSMContext):
     """Обработка введённого номера телефона"""
     phone = message.text.strip()
@@ -143,7 +147,7 @@ async def process_phone(message: Message, state: FSMContext):
         if user:
             # Таблица «Доступ» — источник правды: обновляем БД из таблицы
             sync = GoogleSheetsSync()
-            employee = sync.find_employee_by_phone(phone)
+            employee = await asyncio.to_thread(sync.find_employee_by_phone, phone)
             if employee:
                 await user_repo.update(
                     user.id,
@@ -155,13 +159,15 @@ async def process_phone(message: Message, state: FSMContext):
                 user = await user_repo.get_by_id(user.id)
                 if not user or not user.is_active:
                     await message.answer(
-                        "❌ Ваш доступ деактивирован. Обратитесь к менеджеру."
+                        "🔒 Ваш доступ временно приостановлен.\n"
+                        "Если это ошибка — обратитесь к Вашему менеджеру."
                     )
                     await state.clear()
                     return
 
             await user_repo.bind_telegram(user.id, telegram_id)
 
+            tests_on = await are_tests_active(user.branch)
             caption = (
                 "✅ <b>Спасибо, доступ подтверждён!</b>\n"
                 "Теперь Вы можете пользоваться ботом.\n\n"
@@ -173,12 +179,12 @@ async def process_phone(message: Message, state: FSMContext):
                 await message.answer_photo(
                     photo=FSInputFile(LOGO_PATH),
                     caption=caption,
-                    reply_markup=get_main_menu_keyboard(),
+                    reply_markup=get_main_menu_keyboard(tests_on),
                 )
             else:
                 await message.answer(
                     caption,
-                    reply_markup=get_main_menu_keyboard(),
+                    reply_markup=get_main_menu_keyboard(tests_on),
                 )
 
             # Подсказка для менеджера
@@ -209,13 +215,14 @@ async def process_phone(message: Message, state: FSMContext):
             existing_user = await user_repo.get_by_phone_any(phone)
             if existing_user and existing_user.telegram_id:
                 await message.answer(
-                    "Этот номер телефона уже привязан к другому аккаунту Telegram. "
-                    "Пожалуйста, обратитесь к Вашему менеджеру."
+                    "ℹ️ Этот номер уже используется другим сотрудником.\n\n"
+                    "Если Вы сменили телефон или аккаунт — попросите менеджера "
+                    "обновить данные, и попробуйте снова."
                 )
             else:
                 # Проверяем таблицу "Доступ" — может сотрудник только что добавлен
                 sync = GoogleSheetsSync()
-                employee = sync.find_employee_by_phone(phone)
+                employee = await asyncio.to_thread(sync.find_employee_by_phone, phone)
                 if employee:
                     new_user = await user_repo.create(
                         full_name=employee["full_name"],
@@ -225,6 +232,7 @@ async def process_phone(message: Message, state: FSMContext):
                         telegram_username=None,
                     )
                     await user_repo.bind_telegram(new_user.id, telegram_id)
+                    tests_on = await are_tests_active(new_user.branch)
                     caption = (
                         "✅ <b>Спасибо, доступ подтверждён!</b>\n"
                         "Вы найдены в таблице сотрудников.\n\n"
@@ -236,12 +244,12 @@ async def process_phone(message: Message, state: FSMContext):
                         await message.answer_photo(
                             photo=FSInputFile(LOGO_PATH),
                             caption=caption,
-                            reply_markup=get_main_menu_keyboard(),
+                            reply_markup=get_main_menu_keyboard(tests_on),
                         )
                     else:
                         await message.answer(
                             caption,
-                            reply_markup=get_main_menu_keyboard(),
+                            reply_markup=get_main_menu_keyboard(tests_on),
                         )
                     if new_user.role.value == "manager":
                         await message.answer(
@@ -265,9 +273,10 @@ async def process_phone(message: Message, state: FSMContext):
                         pass
                 else:
                     await message.answer(
-                        "Пользователь с таким номером не найден. "
-                        "Пожалуйста, обратитесь к Вашему менеджеру.\n\n"
-                        "Вы можете попробовать ввести номер ещё раз или связаться с администратором."
+                        "🤔 К сожалению, мы не нашли этот номер в системе.\n\n"
+                        "Попробуйте ввести номер ещё раз — возможно, была опечатка.\n"
+                        "Если номер верный, обратитесь к Вашему менеджеру, "
+                        "чтобы Вас добавили в таблицу сотрудников."
                     )
 
 
@@ -277,11 +286,21 @@ async def back_to_main(callback: CallbackQuery, user=None):
     await callback.answer()
 
     if user:
+        tests_on = await are_tests_active(user.branch)
         await callback.message.answer(
             "Главное меню:",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_main_menu_keyboard(tests_on),
         )
     else:
         await callback.message.answer(
             "Пожалуйста, используйте команду /start для начала работы."
         )
+
+
+@router.message(BindPhoneStates.waiting_for_phone)
+async def process_phone_invalid(message: Message):
+    """Fallback: отправлено не текстовое сообщение при вводе телефона"""
+    await message.answer(
+        "Пожалуйста, введите Ваш номер телефона текстом.\n"
+        "Например: +7 999 123 45 67 или 89991234567"
+    )

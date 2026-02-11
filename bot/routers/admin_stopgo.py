@@ -1,9 +1,14 @@
 """Управление стоп/go-листами (админ)"""
 
+import asyncio
+import logging
+
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+
+logger = logging.getLogger(__name__)
 
 from database.database import async_session_maker
 from database.repositories import UserRepository, MenuRepository
@@ -107,7 +112,7 @@ async def admin_list_add_start(callback: CallbackQuery, state: FSMContext, user=
     )
 
 
-@router.message(StopGoSearchStates.search_add)
+@router.message(StopGoSearchStates.search_add, F.text)
 async def admin_list_add_search(message: Message, state: FSMContext, user=None):
     """Поиск блюда для добавления"""
     if not user or user.role.value != "manager":
@@ -184,7 +189,7 @@ async def admin_list_remove_start(callback: CallbackQuery, state: FSMContext, us
     )
 
 
-@router.message(StopGoSearchStates.search_remove)
+@router.message(StopGoSearchStates.search_remove, F.text)
 async def admin_list_remove_search(message: Message, state: FSMContext, user=None):
     """Поиск блюда для удаления"""
     if not user or user.role.value != "manager":
@@ -281,11 +286,26 @@ async def admin_list_broadcast(callback: CallbackQuery, user=None):
                 tg_user.telegram_id, text, parse_mode="HTML"
             )
             sent += 1
-        except Exception:
-            pass
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            logger.warning(f"Не удалось отправить {title} пользователю {tg_user.full_name}: {e}")
 
     await callback.message.edit_text(
         f"📢 {title} разослан {sent} сотрудникам.",
         reply_markup=get_stopgo_action_keyboard(list_type),
         parse_mode="HTML",
     )
+
+
+# ========== FALLBACK ДЛЯ FSM ==========
+
+@router.message(StopGoSearchStates.search_add)
+async def admin_list_add_search_invalid(message: Message):
+    """Fallback: отправлено не текстовое сообщение при поиске"""
+    await message.answer("Пожалуйста, введите название блюда текстом.")
+
+
+@router.message(StopGoSearchStates.search_remove)
+async def admin_list_remove_search_invalid(message: Message):
+    """Fallback: отправлено не текстовое сообщение при поиске"""
+    await message.answer("Пожалуйста, введите название блюда текстом.")

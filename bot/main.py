@@ -11,11 +11,15 @@ from database.database import init_db
 from bot.routers import setup_routers
 from bot.middlewares import AuthMiddleware
 
-# Настройка логирования
+# Настройка логирования — INFO для production (синхронизация, привязки, ошибки)
 logging.basicConfig(
-    level=logging.INFO if settings.DEBUG else logging.WARNING,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+# Уменьшаем шум от библиотек
+logging.getLogger("aiogram").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +34,7 @@ async def auto_sync():
         else:
             logger.warning(f"Автосинхронизация: {report.get('error')}")
     except Exception as e:
-        logger.error(f"Ошибка автосинхронизации: {e}")
+        logger.error(f"Ошибка автосинхронизации: {e}", exc_info=True)
 
 
 async def main():
@@ -57,7 +61,7 @@ async def main():
 
     # Планировщик автосинхронизации (каждые 4 часа: 2:00, 6:00, 10:00, 14:00, 18:00, 22:00)
     scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
-    scheduler.add_job(auto_sync, "interval", hours=4)
+    scheduler.add_job(auto_sync, "interval", hours=4, max_instances=1, id="auto_sync")
     scheduler.start()
     logger.info("Автосинхронизация запланирована каждые 4 часа")
 
