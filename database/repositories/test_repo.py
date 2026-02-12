@@ -168,7 +168,11 @@ class TestRepository:
         )
         question_ids = [row[0] for row in questions.all()]
 
-        # Удаляем в правильном порядке: ответы → вопросы → тесты
+        # Удаляем в правильном порядке: результаты → ответы → вопросы → тесты
+        if test_ids:
+            await self.session.execute(
+                delete(TestResult).where(TestResult.test_id.in_(test_ids))
+            )
         if question_ids:
             await self.session.execute(
                 delete(Answer).where(Answer.question_id.in_(question_ids))

@@ -44,6 +44,11 @@ async def admin_photos_search(message: Message, state: FSMContext, user=None):
         await state.clear()
         return
 
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
     async with async_session_maker() as session:
         menu_repo = MenuRepository(session)
         items = await menu_repo.search_by_name(message.text.strip(), user.branch)
@@ -51,7 +56,14 @@ async def admin_photos_search(message: Message, state: FSMContext, user=None):
     await state.clear()
 
     if not items:
-        await message.answer("❌ Ничего не найдено. Попробуйте другой запрос.")
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        await message.answer(
+            "❌ Ничего не найдено. Попробуйте другой запрос.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔍 Искать ещё", callback_data="admin:photos")],
+                [InlineKeyboardButton(text="◀️ В админку", callback_data="admin:back")],
+            ]),
+        )
         return
 
     await message.answer(
@@ -110,13 +122,23 @@ async def admin_photo_upload(message: Message, state: FSMContext, user=None):
         menu_repo = MenuRepository(session)
         item = await menu_repo.update(item_id, photo=str(file_path))
 
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     if item:
         await message.answer(
             f"✅ Фото для <b>{item.name}</b> сохранено!",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📸 Загрузить ещё", callback_data="admin:photos")],
+                [InlineKeyboardButton(text="◀️ В админку", callback_data="admin:back")],
+            ]),
             parse_mode="HTML",
         )
     else:
-        await message.answer("❌ Блюдо не найдено.")
+        await message.answer(
+            "❌ Блюдо не найдено.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ В админку", callback_data="admin:back")],
+            ]),
+        )
 
 
 @router.message(PhotoUploadStates.search)

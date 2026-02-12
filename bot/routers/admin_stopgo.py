@@ -83,7 +83,8 @@ async def admin_list_view(callback: CallbackQuery, user=None):
     else:
         text = f"{emoji} <b>{title}</b> ({len(items)} позиций):\n\n"
         for item in items:
-            text += f"• {item.name} — {item.price:.0f}₽\n"
+            price_str = f" — {item.price:.0f}₽" if item.price else ""
+            text += f"• {item.name}{price_str}\n"
 
     await callback.message.edit_text(
         text,
@@ -118,6 +119,11 @@ async def admin_list_add_search(message: Message, state: FSMContext, user=None):
     if not user or user.role.value != "manager":
         await state.clear()
         return
+
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
     data = await state.get_data()
     list_type = data.get("list_type", "stop")
@@ -195,6 +201,11 @@ async def admin_list_remove_search(message: Message, state: FSMContext, user=Non
     if not user or user.role.value != "manager":
         await state.clear()
         return
+
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
     data = await state.get_data()
     list_type = data.get("list_type", "stop")
@@ -275,7 +286,8 @@ async def admin_list_broadcast(callback: CallbackQuery, user=None):
 
         text = f"{emoji} <b>{title}</b> (обновлён):\n\n"
         for item in items:
-            text += f"• {item.name} — {item.price:.0f}₽\n"
+            price_str = f" — {item.price:.0f}₽" if item.price else ""
+            text += f"• {item.name}{price_str}\n"
 
         tg_users = await user_repo.get_all_with_telegram()
 

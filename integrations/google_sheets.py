@@ -609,88 +609,107 @@ class GoogleSheetsSync:
             logger.error(f"Ошибка синхронизации сотрудников: {e}")
             report["details"]["employees"] = {"error": str(e)}
 
-        # 2. Синхронизация меню (атомарная транзакция)
+        # 2. Синхронизация меню (upsert: обновляем изменённое, не трогаем фото/статусы)
         try:
             async with async_session_maker() as session:
                 menu_items = await asyncio.to_thread(self.read_menu)
                 menu_repo = MenuRepository(session)
 
-                existing_items = await menu_repo.get_all(branch=branch)
-                status_map = {}
-                photo_map = {}
-                for item in existing_items:
-                    status_map[item.name.lower()] = item.status
-                    if item.photo:
-                        photo_map[item.name.lower()] = item.photo
-
-                await menu_repo.delete_all_by_branch(branch, commit=False)
+                created, updated, unchanged, deleted = 0, 0, 0, 0
+                keep_ids = set()
 
                 for item_data in menu_items:
-                    name_lower = item_data["name"].lower()
-                    if name_lower in status_map:
-                        item_data["status"] = status_map[name_lower]
-                    if name_lower in photo_map:
-                        item_data["photo"] = photo_map[name_lower]
+                    existing = await menu_repo.get_by_natural_key(
+                        name=item_data["name"],
+                        category=item_data["category"],
+                        menu_type=item_data["menu_type"],
+                        branch=item_data["branch"],
+                        subcategory=item_data.get("subcategory"),
+                    )
+                    action, item = await menu_repo.upsert_from_sheet(item_data, existing)
 
-                count = await menu_repo.bulk_create(menu_items, commit=False)
+                    if action == "created":
+                        created += 1
+                        await session.flush()  # чтобы получить id
+                    elif action == "updated":
+                        updated += 1
+                    else:
+                        unchanged += 1
+
+                    keep_ids.add(item.id)
+
+                deleted = await menu_repo.delete_missing(keep_ids, branch)
                 await session.commit()
-                report["details"]["menu"] = {"count": count}
+
+                report["details"]["menu"] = {
+                    "created": created,
+                    "updated": updated,
+                    "unchanged": unchanged,
+                    "deleted": deleted,
+                }
         except Exception as e:
             logger.error(f"Ошибка синхронизации меню: {e}")
             report["details"]["menu"] = {"error": str(e)}
 
-        # 3. Синхронизация обучения
+        # 3. Синхронизация обучения (upsert: обновляем изменённое, не затираем файлы)
         try:
             async with async_session_maker() as session:
                 materials = await asyncio.to_thread(self.read_training)
                 training_repo = TrainingRepository(session)
 
-                existing_materials = await training_repo.get_all(branch=branch)
-                file_map = {}
-                for mat in existing_materials:
-                    if mat.file_path:
-                        file_map[mat.title.lower()] = mat.file_path
-
-                await training_repo.delete_all_by_branch(branch, commit=False)
-
-                # Обрабатываем ссылки на файлы
+                created, updated, unchanged, deleted = 0, 0, 0, 0
                 files_downloaded = 0
+                keep_ids = set()
+
                 for mat_data in materials:
-                    title_lower = mat_data["title"].lower()
-                    
-                    # Если есть ссылка на файл - скачиваем
-                    if mat_data.get("file_url"):
-                        direct_url = self.convert_drive_url_to_direct(mat_data["file_url"])
+                    # Обрабатываем ссылку на файл
+                    file_url = mat_data.pop("file_url", None)
+
+                    existing = await training_repo.get_by_natural_key(
+                        title=mat_data["title"],
+                        role=mat_data["role"],
+                        branch=mat_data["branch"],
+                    )
+
+                    # Скачиваем PDF если есть новая ссылка
+                    if file_url:
+                        direct_url = self.convert_drive_url_to_direct(file_url)
                         if direct_url:
-                            # Создаем путь для сохранения
-                            safe_title = "".join(c for c in mat_data["title"] if c.isalnum() or c in (' ', '_')).rstrip()
+                            safe_title = "".join(
+                                c for c in mat_data["title"]
+                                if c.isalnum() or c in (' ', '_')
+                            ).rstrip()
                             file_path = TEMP_FILES_DIR / f"{safe_title}.pdf"
-                            
-                            # Скачиваем файл
+
                             if await self.download_file(direct_url, file_path):
                                 mat_data["file_path"] = str(file_path)
                                 files_downloaded += 1
-                            else:
-                                # Если не удалось скачать, пытаемся использовать старый файл
-                                if title_lower in file_map:
-                                    mat_data["file_path"] = file_map[title_lower]
-                        else:
-                            # Если не удалось преобразовать ссылку, используем старый файл
-                            if title_lower in file_map:
-                                mat_data["file_path"] = file_map[title_lower]
-                    else:
-                        # Если нет ссылки, сохраняем старый файл если был
-                        if title_lower in file_map:
-                            mat_data["file_path"] = file_map[title_lower]
-                    
-                    # Удаляем временное поле
-                    mat_data.pop("file_url", None)
+                            elif existing and existing.file_path:
+                                mat_data["file_path"] = existing.file_path
+                        elif existing and existing.file_path:
+                            mat_data["file_path"] = existing.file_path
 
-                count = await training_repo.bulk_create(materials, commit=False)
+                    action, material = await training_repo.upsert_from_sheet(mat_data, existing)
+
+                    if action == "created":
+                        created += 1
+                        await session.flush()
+                    elif action == "updated":
+                        updated += 1
+                    else:
+                        unchanged += 1
+
+                    keep_ids.add(material.id)
+
+                deleted = await training_repo.delete_missing(keep_ids, branch)
                 await session.commit()
+
                 report["details"]["training"] = {
-                    "count": count,
-                    "files_downloaded": files_downloaded
+                    "created": created,
+                    "updated": updated,
+                    "unchanged": unchanged,
+                    "deleted": deleted,
+                    "files_downloaded": files_downloaded,
                 }
         except Exception as e:
             logger.error(f"Ошибка синхронизации обучения: {e}")

@@ -183,3 +183,74 @@ class TrainingRepository:
             query = query.where(TrainingMaterial.branch == branch)
         result = await self.session.execute(query)
         return result.scalar() or 0
+
+    async def get_by_natural_key(
+        self, title: str, role: UserRole, branch: str
+    ) -> Optional[TrainingMaterial]:
+        """Найти материал по натуральному ключу (название + роль + филиал)"""
+        result = await self.session.execute(
+            select(TrainingMaterial).where(
+                func.lower(TrainingMaterial.title) == title.lower(),
+                TrainingMaterial.role == role,
+                TrainingMaterial.branch == branch,
+            )
+        )
+        return result.scalars().first()
+
+    async def upsert_from_sheet(
+        self, mat_data: dict, existing: Optional[TrainingMaterial] = None,
+        commit: bool = False
+    ) -> tuple:
+        """
+        Обновить или создать материал из данных таблицы.
+        Не затирает file_path, если новый файл не предоставлен.
+        Возвращает: ("created" | "updated" | "unchanged", TrainingMaterial)
+        """
+        sync_fields = ["description", "content", "category", "order_num"]
+
+        if existing:
+            changes = {}
+            for field in sync_fields:
+                new_val = mat_data.get(field)
+                old_val = getattr(existing, field, None)
+                if new_val != old_val:
+                    changes[field] = new_val
+
+            # file_path обновляем только если он реально новый
+            new_file = mat_data.get("file_path")
+            if new_file and new_file != existing.file_path:
+                changes["file_path"] = new_file
+
+            if changes:
+                await self.session.execute(
+                    update(TrainingMaterial)
+                    .where(TrainingMaterial.id == existing.id)
+                    .values(**changes)
+                )
+                if commit:
+                    await self.session.commit()
+                return ("updated", existing)
+            return ("unchanged", existing)
+        else:
+            material = TrainingMaterial(**mat_data)
+            self.session.add(material)
+            if commit:
+                await self.session.commit()
+            return ("created", material)
+
+    async def delete_missing(self, keep_ids: set, branch: str, commit: bool = False) -> int:
+        """Удалить материалы, которых больше нет в таблице"""
+        if not keep_ids:
+            result = await self.session.execute(
+                delete(TrainingMaterial).where(TrainingMaterial.branch == branch)
+            )
+        else:
+            result = await self.session.execute(
+                delete(TrainingMaterial).where(
+                    TrainingMaterial.branch == branch,
+                    TrainingMaterial.id.notin_(keep_ids),
+                )
+            )
+        if commit:
+            await self.session.commit()
+        return result.rowcount

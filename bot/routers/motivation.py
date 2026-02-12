@@ -3,7 +3,6 @@ from aiogram.types import Message
 
 from database.database import async_session_maker
 from database.repositories import MotivationRepository
-from bot.keyboards import get_back_keyboard
 
 router = Router()
 
@@ -27,8 +26,6 @@ async def show_motivation(message: Message, user):
         text = motivation.text
     
     await message.answer(
-        f"💪 <b>Мотивация дня</b>\n\n"
-        f"{text}",
-        reply_markup=get_back_keyboard("back_to_main"),
-        parse_mode="HTML"
+        f"💪 <b>Мотивация дня</b>\n\n{text}",
+        parse_mode="HTML",
     )

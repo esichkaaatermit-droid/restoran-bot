@@ -38,11 +38,14 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📊 Прогресс обучения", callback_data="admin:progress")],
-            [InlineKeyboardButton(text="🚫 Стоп-лист", callback_data="admin:stop_list")],
-            [InlineKeyboardButton(text="✅ Go-лист", callback_data="admin:go_list")],
+            [
+                InlineKeyboardButton(text="🚫 Стоп-лист", callback_data="admin:stop_list"),
+                InlineKeyboardButton(text="✅ Go-лист", callback_data="admin:go_list"),
+            ],
             [InlineKeyboardButton(text="🍽 Меню", callback_data="admin:menu")],
             [InlineKeyboardButton(text="📝 Аттестация вкл/выкл", callback_data="admin:attest")],
             [InlineKeyboardButton(text="🔄 Синхронизация", callback_data="admin:sync")],
+            [InlineKeyboardButton(text="🚪 Выйти из админки", callback_data="admin:exit")],
         ]
     )
 
@@ -177,9 +180,10 @@ def get_search_results_keyboard(
         elif item.status.value == "go":
             status_icon = "🔥 "
 
+        price_str = f" — {item.price:.0f}₽" if item.price else ""
         buttons.append([
             InlineKeyboardButton(
-                text=f"{status_icon}{item.name} — {item.price:.0f}₽",
+                text=f"{status_icon}{item.name}{price_str}",
                 callback_data=f"admin_list:{action}:{list_type}:{item.id}",
             )
         ])

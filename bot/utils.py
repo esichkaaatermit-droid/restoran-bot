@@ -23,13 +23,14 @@ def get_role_name(role: UserRole) -> str:
 
 
 async def safe_edit_or_send(callback: CallbackQuery, text: str, reply_markup=None, parse_mode="HTML"):
-    """Безопасная навигация: edit_text, а если не получается (фото) — delete + answer"""
+    """Безопасная навигация: edit_text, а если не получается (фото/медиа) — delete + answer"""
     try:
         await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
-    except TelegramBadRequest:
+    except Exception:
+        # Если не можем отредактировать (фото, документ, media) — удаляем и шлём новое
         try:
             await callback.message.delete()
-        except TelegramBadRequest:
+        except Exception:
             pass
         await callback.message.answer(text, reply_markup=reply_markup, parse_mode=parse_mode)
 

@@ -226,3 +226,77 @@ class MenuRepository:
             query = query.where(MenuItem.branch == branch)
         result = await self.session.execute(query)
         return result.scalar() or 0
+
+    async def get_by_natural_key(
+        self, name: str, category: str, menu_type: MenuType, branch: str,
+        subcategory: Optional[str] = None,
+    ) -> Optional[MenuItem]:
+        """Найти позицию по натуральному ключу (название + категория + подкатегория + тип + филиал)"""
+        query = select(MenuItem).where(
+            func.lower(MenuItem.name) == name.lower(),
+            MenuItem.category == category,
+            MenuItem.menu_type == menu_type,
+            MenuItem.branch == branch,
+        )
+        if subcategory is not None:
+            query = query.where(MenuItem.subcategory == subcategory)
+        else:
+            query = query.where(MenuItem.subcategory.is_(None))
+        result = await self.session.execute(query)
+        return result.scalars().first()
+
+    async def upsert_from_sheet(
+        self, item_data: dict, existing: Optional[MenuItem] = None, commit: bool = False
+    ) -> tuple:
+        """
+        Обновить или создать позицию меню из данных таблицы.
+        Не трогает поля: photo, status (они управляются через админку).
+        Возвращает: ("created" | "updated" | "unchanged", MenuItem)
+        """
+        sync_fields = [
+            "description", "composition", "weight_volume", "price",
+            "calories", "proteins", "fats", "carbs",
+        ]
+
+        if existing:
+            changes = {}
+            for field in sync_fields:
+                new_val = item_data.get(field)
+                old_val = getattr(existing, field, None)
+                if new_val != old_val:
+                    changes[field] = new_val
+
+            if changes:
+                await self.session.execute(
+                    update(MenuItem)
+                    .where(MenuItem.id == existing.id)
+                    .values(**changes)
+                )
+                if commit:
+                    await self.session.commit()
+                return ("updated", existing)
+            return ("unchanged", existing)
+        else:
+            item = MenuItem(**item_data)
+            self.session.add(item)
+            if commit:
+                await self.session.commit()
+            return ("created", item)
+
+    async def delete_missing(self, keep_ids: set, branch: str, commit: bool = False) -> int:
+        """Удалить позиции, которых больше нет в таблице"""
+        if not keep_ids:
+            # Удалить всё для филиала
+            result = await self.session.execute(
+                delete(MenuItem).where(MenuItem.branch == branch)
+            )
+        else:
+            result = await self.session.execute(
+                delete(MenuItem).where(
+                    MenuItem.branch == branch,
+                    MenuItem.id.notin_(keep_ids),
+                )
+            )
+        if commit:
+            await self.session.commit()
+        return result.rowcount

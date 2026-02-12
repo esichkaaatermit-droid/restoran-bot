@@ -12,13 +12,19 @@ services:
     ports:
       - "5435:5432"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres && psql -U postgres -c 'SELECT 1' > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   bot:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     env_file:
       - .env
     environment:

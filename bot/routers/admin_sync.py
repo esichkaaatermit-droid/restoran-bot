@@ -21,13 +21,12 @@ async def sync_menu(callback: CallbackQuery, user=None):
 
     await callback.message.edit_text(
         "🔄 <b>Синхронизация с Google Sheets</b>\n\n"
-        "При синхронизации данные из Google Таблицы\n"
-        "заменят текущие данные в боте.\n\n"
-        "⚠️ <b>Что сохранится:</b>\n"
+        "Бот сравнит данные в таблице с текущими и обновит только изменения.\n\n"
+        "✅ <b>Не затрагивается:</b>\n"
         "• Стоп/Go-статусы блюд\n"
         "• Загруженные фото блюд\n"
-        "• Файлы обучающих материалов\n"
-        "• Результаты пройденных тестов\n"
+        "• Скачанные файлы обучения\n"
+        "• Результаты тестов и прогресс\n"
         "• Привязки Telegram сотрудников\n\n"
         "Нажмите кнопку для начала синхронизации:",
         reply_markup=get_sync_keyboard(),
@@ -91,14 +90,36 @@ async def sync_all(callback: CallbackQuery, user=None):
     if "error" in menu:
         text += f"🍽 Меню: ❌ {menu['error']}\n"
     else:
-        text += f"🍽 Меню: загружено {menu.get('count', 0)} позиций\n"
+        parts = []
+        if menu.get("created"):
+            parts.append(f"+{menu['created']} нов.")
+        if menu.get("updated"):
+            parts.append(f"⟳{menu['updated']} обн.")
+        if menu.get("unchanged"):
+            parts.append(f"{menu['unchanged']} без изм.")
+        if menu.get("deleted"):
+            parts.append(f"-{menu['deleted']} удал.")
+        total = menu.get("created", 0) + menu.get("updated", 0) + menu.get("unchanged", 0)
+        text += f"🍽 Меню ({total}): {', '.join(parts) if parts else 'нет данных'}\n"
 
     # Обучение
     training = details.get("training", {})
     if "error" in training:
         text += f"📚 Обучение: ❌ {training['error']}\n"
     else:
-        text += f"📚 Обучение: загружено {training.get('count', 0)} материалов\n"
+        parts = []
+        if training.get("created"):
+            parts.append(f"+{training['created']} нов.")
+        if training.get("updated"):
+            parts.append(f"⟳{training['updated']} обн.")
+        if training.get("unchanged"):
+            parts.append(f"{training['unchanged']} без изм.")
+        if training.get("deleted"):
+            parts.append(f"-{training['deleted']} удал.")
+        if training.get("files_downloaded"):
+            parts.append(f"📎{training['files_downloaded']} файлов")
+        total = training.get("created", 0) + training.get("updated", 0) + training.get("unchanged", 0)
+        text += f"📚 Обучение ({total}): {', '.join(parts) if parts else 'нет данных'}\n"
 
     # Тесты
     tests = details.get("tests", {})
