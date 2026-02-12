@@ -350,9 +350,6 @@ class GoogleSheetsSync:
                     continue
 
                 price = self._safe_float(row.get("Цена (руб.)"))
-                if price is None:
-                    logger.warning(f"Нет цены для '{name}' в листе '{sheet_name}'")
-                    continue
 
                 item = {
                     "name": name,

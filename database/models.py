@@ -76,7 +76,7 @@ class MenuItem(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     composition: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # состав
     weight_volume: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # граммовка/объём
-    price: Mapped[float] = mapped_column(Float, nullable=False)
+    price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     category: Mapped[str] = mapped_column(String(100), nullable=False)  # Завтраки, Основное меню и т.д.
     subcategory: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Каши, Яйца и т.д.
     menu_type: Mapped[MenuType] = mapped_column(Enum(MenuType), nullable=False)  # кухня или бар

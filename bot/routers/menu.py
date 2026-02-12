@@ -171,7 +171,21 @@ async def show_item(callback: CallbackQuery, user=None):
     if item.weight_volume:
         card_text += f"⚖️ <b>Объём/вес:</b> {item.weight_volume}\n"
     
-    card_text += f"💰 <b>Цена:</b> {item.price:.0f} ₽"
+    # КБЖУ
+    kbzhu_parts = []
+    if item.calories:
+        kbzhu_parts.append(f"{item.calories} ккал")
+    if item.proteins:
+        kbzhu_parts.append(f"Б {item.proteins:.1f}")
+    if item.fats:
+        kbzhu_parts.append(f"Ж {item.fats:.1f}")
+    if item.carbs:
+        kbzhu_parts.append(f"У {item.carbs:.1f}")
+    if kbzhu_parts:
+        card_text += f"📊 <b>КБЖУ:</b> {' / '.join(kbzhu_parts)}\n"
+
+    if item.price:
+        card_text += f"\n💰 <b>Цена:</b> {item.price:.0f} ₽"
     
     menu_type = "kitchen" if item.menu_type == MenuType.KITCHEN else "bar"
     is_manager = user and user.role.value == "manager"
